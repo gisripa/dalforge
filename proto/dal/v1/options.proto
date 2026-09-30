@@ -1,0 +1,193 @@
+// DRAFT: backend-neutral options that turn a protobuf file into a DALForge IDL.
+//
+// Messages annotated with (dal.v1.table) become entities (a Postgres table, a
+// DynamoDB table, ...); fields become columns/attributes. Services annotated
+// with (dal.v1.store) declare the access patterns allowed against one entity;
+// each rpc carries exactly one (dal.v1.query).
+//
+// Nothing here may assume a particular store. Physical details live in
+// backend option packages such as dal.pg.v1. Everything is optional unless
+// noted: the defaults are meant to be the performant choice, and options exist
+// only to configure away from them.
+//
+// See docs/design.md for semantics, defaults and lint rules.
+syntax = "proto3";
+
+package dal.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/gisripa/dalforge/gen/dal/v1;dalv1";
+
+// Extension numbers are taken from the 50000-99999 range reserved for
+// in-house use. They must never change once published. Backend packages use
+// their own numbers (dal.pg.v1 uses 51010).
+extend google.protobuf.MessageOptions {
+  Table table = 51000;
+}
+
+extend google.protobuf.FieldOptions {
+  Field field = 51000;
+}
+
+extend google.protobuf.ServiceOptions {
+  Store store = 51000;
+}
+
+extend google.protobuf.MethodOptions {
+  Query query = 51000;
+}
+
+// Table configures the entity backing a message.
+message Table {
+  // Table name. Defaults to the snake_case message name.
+  string name = 1;
+
+  // Columns the data is sharded by. Recorded and validated (the columns must
+  // exist and be active); routing and enforcement are out of scope for now.
+  repeated string shard_key = 2;
+}
+
+// Field configures the column backing a field. Nullability comes from the
+// proto field itself: proto3 `optional` fields are nullable, all others are
+// required.
+message Field {
+  // Column name. Defaults to the proto field name.
+  string name = 1;
+
+  // Refines the proto type. It drives the Go domain type (e.g. uuid.UUID for
+  // a string) and each backend's physical type.
+  Format format = 2;
+
+  // Marks the field as part of the primary key. Multiple fields form a
+  // composite key, ordered by their declaration order in the message.
+  bool primary_key = 3;
+
+  bool unique = 4;
+
+  // Behaviour the generated code manages for this column.
+  Role role = 5;
+
+  // Lifecycle state used for rolling-deploy safe changes.
+  State state = 6;
+}
+
+// Format is a logical type layered on a proto scalar.
+enum Format {
+  FORMAT_UNSPECIFIED = 0;
+  // On string: a UUID. Prefer UUIDv7 for primary keys.
+  FORMAT_UUID = 1;
+  // On string: an arbitrary-precision decimal.
+  FORMAT_DECIMAL = 2;
+  // On string: a JSON document.
+  FORMAT_JSON = 3;
+}
+
+// Role marks columns whose values the generated code manages.
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  // Set on insert, never updated.
+  ROLE_CREATE_TIME = 1;
+  // Set on insert and on every update.
+  ROLE_UPDATE_TIME = 2;
+  // Soft delete marker: Delete sets it, and reads exclude rows where it is set.
+  ROLE_DELETE_TIME = 3;
+  // Optimistic lock: updates compare-and-swap on it and increment it.
+  ROLE_VERSION = 4;
+}
+
+// State is the lifecycle of a column across rolling deploys.
+enum State {
+  // Unset means active.
+  STATE_UNSPECIFIED = 0;
+  STATE_ACTIVE = 1;
+  // Still stored, but excluded from generated reads and writes. A column must
+  // ship as DEPRECATED in one release before the field can be removed (and
+  // its number reserved).
+  STATE_DEPRECATED = 2;
+}
+
+// Store binds a service to the entity whose access patterns it declares.
+message Store {
+  // Fully qualified or file-local name of the entity message, e.g. "Order".
+  string entity = 1;
+}
+
+// Query declares the access pattern implemented by one rpc.
+message Query {
+  oneof kind {
+    Get get = 1;
+    List list = 2;
+    Create create = 3;
+    Update update = 4;
+    Delete delete = 5;
+    Upsert upsert = 6;
+  }
+}
+
+// Consistency is the read consistency an rpc needs.
+enum Consistency {
+  // Eventual: Postgres reads from the reader pool; DynamoDB does an
+  // eventually consistent read.
+  CONSISTENCY_UNSPECIFIED = 0;
+  CONSISTENCY_EVENTUAL = 1;
+  // Strong, for read-after-write: Postgres reads from the writer pool;
+  // DynamoDB sets ConsistentRead (not available on secondary indexes).
+  CONSISTENCY_STRONG = 2;
+}
+
+// Get fetches at most one row by a unique key.
+message Get {
+  // Lookup columns. Defaults to the primary key. Any other set must be
+  // covered by a unique column or unique index.
+  repeated string by = 1;
+
+  Consistency consistency = 2;
+}
+
+// List pages through rows matching equality filters, using keyset
+// pagination: the access path is (eq..., order_by..., primary key).
+message List {
+  // Equality filter columns.
+  repeated string eq = 1;
+
+  // Optional range filter column. It must be the leading order_by column.
+  string range = 2;
+
+  // Sort columns, each optionally suffixed with ASC or DESC. When empty, the
+  // sort is inherited from a backend-declared index whose leading columns are
+  // exactly eq; failing that, it is the primary key. The primary key is
+  // always appended as the keyset tie-breaker.
+  repeated string order_by = 3;
+
+  // Page size limits. Zero means the project default.
+  uint32 default_page_size = 4;
+  uint32 max_page_size = 5;
+
+  Consistency consistency = 6;
+}
+
+// Create inserts one row and returns it.
+message Create {}
+
+// Update modifies one row by primary key. When the entity has a ROLE_VERSION
+// column the update is a compare-and-swap on it.
+message Update {
+  // Columns the update may set. Defaults to every non-key column that is not
+  // managed by a Role.
+  repeated string columns = 1;
+}
+
+// Delete removes one row by primary key. When the entity has a
+// ROLE_DELETE_TIME column the delete is soft.
+message Delete {}
+
+// Upsert inserts one row, or updates it on conflict.
+message Upsert {
+  // Conflict target columns. Defaults to the primary key; any other set must
+  // be covered by a unique column or unique index.
+  repeated string conflict_on = 1;
+
+  // Columns updated on conflict. Defaults to the same set as Update.columns.
+  repeated string columns = 2;
+}

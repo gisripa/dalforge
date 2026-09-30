@@ -1,0 +1,91 @@
+# Tool versions and project tasks, managed by mise (https://mise.jdx.dev).
+# First time: `mise trust && mise install`
+
+[tools]
+go = "1.26"            # latest 1.26.x patch
+golangci-lint = "2"    # latest 2.x
+# Container runtime without Docker Desktop: a Colima VM running dockerd.
+colima = "latest"
+lima = "latest"        # colima's VM manager
+docker-cli = "latest"
+docker-compose = "latest"
+
+[env]
+# Put ./bin on PATH while inside this directory, so built binaries run by name.
+_.path = ["{{config_root}}/bin"]
+# Admin URL of the compose Postgres; integration tests create a database per test.
+DALFORGE_TEST_DATABASE_URL = "postgres://dalforge:dalforge@localhost:55432/dalforge?sslmode=disable"
+# Point docker at this repo's Colima profile. In CI (CI set), keep the runner's native Docker.
+DOCKER_HOST = "{% if get_env(name='CI', default='') == '' %}unix://{{ env.HOME }}/.colima/dalforge/docker.sock{% else %}{{ get_env(name='DOCKER_HOST', default='unix:///var/run/docker.sock') }}{% endif %}"
+
+[tasks.build]
+description = "Build all commands into ./bin"
+run = "go build -o bin/ ./cmd/..."
+
+[tasks.dalforge]
+description = "Run the dalforge command (pass args after --)"
+run = "go run ./cmd/dalforge"
+
+[tasks.test]
+description = "Run unit tests with the race detector"
+run = "go test -race -count=1 ./..."
+
+[tasks."test:integration"]
+description = "Run integration tests against the compose Postgres (needs Docker)"
+depends = ["db:up"]
+run = "go test -tags integration -race -count=1 ./..."
+
+[tasks."vm:up"]
+description = "Start the dalforge Colima VM (no-op if running, or in CI)"
+run = """
+[ -n "${CI:-}" ] && exit 0
+colima status dalforge >/dev/null 2>&1 || colima start dalforge --vm-type vz --cpu 2 --memory 2 --disk 10 --activate=false
+"""
+
+[tasks."vm:down"]
+description = "Stop the dalforge Colima VM (frees its memory)"
+run = "colima stop dalforge"
+
+[tasks."db:up"]
+description = "Start the local Postgres (compose.yaml) and wait until it is healthy"
+depends = ["vm:up"]
+run = "docker-compose up -d --wait"
+
+[tasks."db:down"]
+description = "Stop the local Postgres and discard its data"
+run = "docker-compose down -v"
+
+[tasks."db:psql"]
+description = "Open psql on the local Postgres"
+run = "docker-compose exec postgres psql -U dalforge"
+
+[tasks.cover]
+description = "Run tests with a coverage report"
+run = [
+  "go test -coverprofile=coverage.out ./...",
+  "go tool cover -func=coverage.out",
+]
+
+[tasks.fmt]
+description = "Format code"
+run = "golangci-lint fmt"
+
+[tasks.lint]
+description = "Run linters"
+run = "golangci-lint run"
+
+[tasks.tidy]
+description = "Tidy go.mod / go.sum"
+run = "go mod tidy"
+
+[tasks.check]
+description = "Fast checks, no Docker: lint + unit tests + build"
+depends = ["lint", "test", "build"]
+
+[tasks."check:all"]
+description = "Everything CI should run: check + integration tests"
+depends = ["check", "test:integration"]
+
+[tasks.clean]
+description = "Remove build artifacts"
+run = "rm -rf bin coverage.out"
