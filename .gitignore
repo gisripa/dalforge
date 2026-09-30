@@ -1,0 +1,6 @@
+/bin/
+coverage.out
+*.test
+.DS_Store
+mise.local.toml
+/.claude/plans/

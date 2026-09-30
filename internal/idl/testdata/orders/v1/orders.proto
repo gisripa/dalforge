@@ -1,0 +1,85 @@
+// Example IDL exercising the draft dal.v1 and dal.pg.v1 options. Mirrored in docs/design.md.
+syntax = "proto3";
+
+package orders.v1;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Order {
+  // "order" is a reserved word, so the table name is explicit.
+  option (dal.v1.table) = {
+    name: "orders"
+    shard_key: ["account_id"]
+  };
+  option (dal.pg.v1.table) = {index_budget: 4};
+
+  // UUIDv7 keeps the primary key time-ordered for keyset pagination.
+  string id = 1 [(dal.v1.field) = {
+    format: FORMAT_UUID
+    primary_key: true
+  }];
+  string account_id = 2 [(dal.v1.field).format = FORMAT_UUID];
+  string status = 3 [(dal.pg.v1.column).default = "'pending'"];
+  optional string note = 4;
+  int64 version = 5 [(dal.v1.field).role = ROLE_VERSION];
+  google.protobuf.Timestamp created_at = 6 [(dal.v1.field).role = ROLE_CREATE_TIME];
+  google.protobuf.Timestamp updated_at = 7 [(dal.v1.field).role = ROLE_UPDATE_TIME];
+  optional google.protobuf.Timestamp deleted_at = 8 [(dal.v1.field).role = ROLE_DELETE_TIME];
+}
+
+service OrderStore {
+  option (dal.v1.store) = {entity: "Order"};
+
+  rpc GetById(GetByIdRequest) returns (Order) {
+    option (dal.v1.query) = {
+      get: {}
+    };
+  }
+
+  // Derives INDEX orders (account_id, created_at DESC, id DESC).
+  rpc ListByAccount(ListByAccountRequest) returns (ListOrdersResponse) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["account_id"]
+        order_by: ["created_at DESC"]
+      }
+    };
+  }
+
+  rpc Create(Order) returns (Order) {
+    option (dal.v1.query) = {
+      create: {}
+    };
+  }
+
+  rpc UpdateStatus(Order) returns (Order) {
+    option (dal.v1.query) = {
+      update: {
+        columns: ["status", "note"]
+      }
+    };
+  }
+
+  rpc Delete(GetByIdRequest) returns (Order) {
+    option (dal.v1.query) = {
+      delete: {}
+    };
+  }
+}
+
+message GetByIdRequest {
+  string id = 1;
+}
+
+message ListByAccountRequest {
+  string account_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListOrdersResponse {
+  repeated Order orders = 1;
+  string next_page_token = 2;
+}

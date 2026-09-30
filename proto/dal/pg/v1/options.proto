@@ -1,0 +1,84 @@
+// DRAFT: Postgres backend options. These refine the physical schema only; the
+// entity and its access patterns are declared with dal.v1 and stay
+// backend-neutral. Every option here is optional.
+//
+// See docs/design.md for the type mapping and index derivation.
+syntax = "proto3";
+
+package dal.pg.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/gisripa/dalforge/gen/dal/pg/v1;pgv1";
+
+extend google.protobuf.MessageOptions {
+  Table table = 51010;
+}
+
+extend google.protobuf.FieldOptions {
+  Column column = 51010;
+}
+
+// Table refines the Postgres table.
+message Table {
+  // Explicit indexes. Most indexes are derived from access patterns; declare
+  // one here only for partial or covering indexes, or to pin the sort order
+  // that List queries without order_by inherit.
+  repeated Index indexes = 1;
+
+  // Overrides the per-table index budget used by the write-amplification
+  // lint. Zero means the project default.
+  uint32 index_budget = 2;
+}
+
+// Index is an explicitly declared index.
+message Index {
+  // Index name. Defaults to <table>_<col>_<col>_idx.
+  string name = 1;
+
+  // Key columns in order, each optionally suffixed with ASC or DESC, e.g.
+  // ["account_id", "created_at DESC"].
+  repeated string columns = 2;
+
+  // Non-key columns stored in the index (INCLUDE) for index-only scans.
+  repeated string include = 3;
+
+  // Predicate for a partial index, as a SQL boolean expression.
+  string where = 4;
+
+  bool unique = 5;
+}
+
+// Column refines the Postgres column.
+message Column {
+  // Physical type. When unset it is inferred from the proto type and the
+  // dal.v1 format; see docs/design.md for the mapping.
+  oneof pg_type {
+    Type type = 1;
+    // Raw type for anything Type does not cover yet (extension types such as
+    // vector(1536), or parameterised types such as numeric(12,2)).
+    string custom_type = 2;
+  }
+
+  // Column default as a SQL expression, e.g. "now()" or "'pending'".
+  string default = 3;
+}
+
+// Type lists Postgres types with first-class support.
+enum Type {
+  TYPE_UNSPECIFIED = 0;
+  TYPE_TEXT = 1;
+  TYPE_UUID = 2;
+  TYPE_BOOLEAN = 3;
+  TYPE_SMALLINT = 4;
+  TYPE_INTEGER = 5;
+  TYPE_BIGINT = 6;
+  TYPE_REAL = 7;
+  TYPE_DOUBLE_PRECISION = 8;
+  TYPE_NUMERIC = 9;
+  TYPE_TIMESTAMPTZ = 10;
+  TYPE_DATE = 11;
+  TYPE_JSONB = 12;
+  TYPE_BYTEA = 13;
+  TYPE_INET = 14;
+}
