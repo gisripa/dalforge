@@ -8,6 +8,10 @@ import "dal/v1/options.proto";
 import "google/protobuf/timestamp.proto";
 
 message Item {
+  // legacy_code was removed: reserved, so its number and name can't be reused.
+  reserved 6;
+  reserved "legacy_code";
+
   string tenant_id = 1 [(dal.v1.field) = {
     format: FORMAT_UUID
     primary_key: true
@@ -19,7 +23,6 @@ message Item {
   string sku = 3 [(dal.v1.field).unique = true];
   string name = 4;
   optional string color = 5;
-  string legacy_code = 6 [(dal.v1.field).state = STATE_DEPRECATED];
   int64 version = 7 [(dal.v1.field).role = ROLE_VERSION];
   google.protobuf.Timestamp created_at = 8 [(dal.v1.field).role = ROLE_CREATE_TIME];
   google.protobuf.Timestamp updated_at = 9 [(dal.v1.field).role = ROLE_UPDATE_TIME];

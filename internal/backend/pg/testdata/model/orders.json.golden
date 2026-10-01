@@ -13,8 +13,7 @@
           "go_type": {
             "import": "github.com/google/uuid",
             "name": "UUID"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "account_id",
@@ -25,8 +24,7 @@
           "go_type": {
             "import": "github.com/google/uuid",
             "name": "UUID"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "status",
@@ -37,8 +35,7 @@
           "default": "'pending'",
           "go_type": {
             "name": "string"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "note",
@@ -48,8 +45,7 @@
           "go_type": {
             "name": "string",
             "pointer": true
-          },
-          "state": "active"
+          }
         },
         {
           "name": "version",
@@ -60,8 +56,7 @@
           "default": "1",
           "go_type": {
             "name": "int64"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "created_at",
@@ -73,8 +68,7 @@
           "go_type": {
             "import": "time",
             "name": "Time"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "updated_at",
@@ -86,8 +80,7 @@
           "go_type": {
             "import": "time",
             "name": "Time"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "deleted_at",
@@ -98,8 +91,7 @@
             "import": "time",
             "name": "Time",
             "pointer": true
-          },
-          "state": "active"
+          }
         }
       ],
       "primary_key": [

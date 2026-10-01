@@ -105,7 +105,6 @@ type Field struct {
 	PrimaryKey bool   `json:"primary_key,omitempty"`
 	Unique     bool   `json:"unique,omitempty"`
 	Role       Role   `json:"role,omitempty"`
-	State      State  `json:"state"`
 	Pos        Pos    `json:"pos"`
 }
 

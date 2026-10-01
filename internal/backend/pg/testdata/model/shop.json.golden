@@ -13,8 +13,7 @@
           "go_type": {
             "import": "github.com/google/uuid",
             "name": "UUID"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "name",
@@ -24,8 +23,7 @@
           "not_null": true,
           "go_type": {
             "name": "string"
-          },
-          "state": "active"
+          }
         }
       ],
       "primary_key": [

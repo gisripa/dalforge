@@ -18,7 +18,7 @@ const (
 	RuleCustomType = "DAL208" // custom_type/go_type pairing, undeclared extension
 	RuleTypeMap    = "DAL209" // no or incompatible type mapping
 	RuleDuplicate  = "DAL210" // duplicate table or column name
-	RuleIndexRef   = "DAL211" // index references an unknown/deprecated/repeated field
+	RuleIndexRef   = "DAL211" // index references an unknown or repeated field
 )
 
 // _configPos attributes findings about the deploy target to the config file.
@@ -118,10 +118,9 @@ func (b *builder) column(e *ir.Entity, f *ir.Field, hint *pgir.Column) *Column {
 		Name:    f.Column,
 		Field:   f.Name,
 		Number:  f.Number,
-		NotNull: !f.Nullable && f.State == ir.StateActive, // deprecated columns relax NOT NULL (design §8)
+		NotNull: !f.Nullable,
 		Default: hint.Default,
 		Unique:  f.Unique,
-		State:   f.State,
 	}
 	if col.Default == "" {
 		switch f.Role {
@@ -213,8 +212,6 @@ func (b *builder) index(e *ir.Entity, idx *pgir.Index) *Index {
 		switch {
 		case f == nil:
 			b.diags.Add(RuleIndexRef, diag.Error, e.Pos, "%s %s: %s has no field %q%s", label, what, e.FullName, name, check.ColumnHint(e, name))
-		case f.State == ir.StateDeprecated:
-			b.diags.Add(RuleIndexRef, diag.Error, e.Pos, "%s %s: field %q is deprecated", label, what, name)
 		case seen[name]:
 			b.diags.Add(RuleIndexRef, diag.Error, e.Pos, "%s %s: field %q is listed more than once", label, what, name)
 		default:

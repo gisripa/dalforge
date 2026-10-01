@@ -71,22 +71,6 @@ func (r Role) String() string { return enumString(_roleNames, int(r)) }
 // MarshalText implements encoding.TextMarshaler.
 func (r Role) MarshalText() ([]byte, error) { return enumText(_roleNames, int(r), "role") }
 
-// State is a column's lifecycle state.
-type State int
-
-// States. The loader turns an unset state into StateActive.
-const (
-	StateActive State = iota
-	StateDeprecated
-)
-
-var _stateNames = []string{"active", "deprecated"}
-
-func (s State) String() string { return enumString(_stateNames, int(s)) }
-
-// MarshalText implements encoding.TextMarshaler.
-func (s State) MarshalText() ([]byte, error) { return enumText(_stateNames, int(s), "state") }
-
 // Consistency is the read consistency a query needs. The loader turns an
 // unset consistency into ConsistencyEventual.
 type Consistency int

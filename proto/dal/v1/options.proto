@@ -48,14 +48,23 @@ message Table {
   string name = 1;
 
   // Fields the data is sharded by. Recorded and validated (the fields must
-  // exist and be active); routing and enforcement are out of scope for now.
+  // exist); routing and enforcement are out of scope for now.
   repeated string shard_key = 2;
 }
 
 // Field configures the column backing a field. Nullability comes from the
 // proto field itself: proto3 `optional` fields are nullable, all others are
 // required.
+//
+// To remove a field, delete it and reserve its number and name. Its column is
+// retired, not dropped: schema changes are always additive, so code from the
+// previous release keeps working (see docs/design.md §8).
 message Field {
+  // Was a lifecycle state (STATE_DEPRECATED), removed in favour of retiring
+  // fields by deleting them.
+  reserved 6;
+  reserved "state";
+
   // Column name. Defaults to the proto field name.
   string name = 1;
 
@@ -71,9 +80,6 @@ message Field {
 
   // Behaviour the generated code manages for this column.
   Role role = 5;
-
-  // Lifecycle state used for rolling-deploy safe changes.
-  State state = 6;
 }
 
 // Format is a logical type layered on a proto scalar.
@@ -98,17 +104,6 @@ enum Role {
   ROLE_DELETE_TIME = 3;
   // Optimistic lock: updates compare-and-swap on it and increment it.
   ROLE_VERSION = 4;
-}
-
-// State is the lifecycle of a column across rolling deploys.
-enum State {
-  // Unset means active.
-  STATE_UNSPECIFIED = 0;
-  STATE_ACTIVE = 1;
-  // Still stored, but excluded from generated reads and writes. A column must
-  // ship as DEPRECATED in one release before the field can be removed (and
-  // its number reserved).
-  STATE_DEPRECATED = 2;
 }
 
 // Store binds a service to the entity whose access patterns it declares.

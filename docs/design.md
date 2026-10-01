@@ -241,7 +241,7 @@ layer, including all generated code. It never changes the IDL model.
 
 | Layer | IDL | Generator | Generated code / runtime |
 |---|---|---|---|
-| **Core** (backend-neutral) | `dal.v1`: entity, fields, format, roles, lifecycle, shard key, access patterns, consistency | IR, access-path resolution, core lint (DAL1xx) | runtime `dal`: `Page[T]`, `All`, page-token envelope, sentinel errors, retrier |
+| **Core** (backend-neutral) | `dal.v1`: entity, fields, format, roles, shard key, access patterns, consistency | IR, access-path resolution, core lint (DAL1xx) | runtime `dal`: `Page[T]`, `All`, page-token envelope, sentinel errors, retrier |
 | **Backend** (pg today) | `dal.pg.v1`: physical types, SQL defaults, explicit/partial/covering indexes, index budget | physical model, backend lint (DAL2xx, DAL3xx), schema/query/sqlc/migration emitters, DAL package emitter | the DAL package per proto package (repository interfaces + implementation + model aliases over sqlc's output), runtime `dal/dalpg` (`DB` pools, keyset codec, error mapping, `WithTx`) |
 
 **Rules that keep the core portable:**
@@ -277,7 +277,7 @@ This is a feasibility check only; the DynamoDB backend isn't built.
 | `ROLE_DELETE_TIME` | partial indexes + filter | sparse GSI or `FilterExpression` (lint warning: consumes read capacity) |
 | upsert | `INSERT … ON CONFLICT` | `PutItem` / `UpdateItem` |
 | page token | encoded keyset tuple | `LastEvaluatedKey`, passed through |
-| lifecycle states | columns + migrations | attributes; no DDL, and GSI changes belong to IaC |
+| removed fields | retired columns (kept, `NOT NULL` relaxed) | attributes simply stop being written; GSI changes belong to IaC |
 | transactions | `WithTx` on `pgx.Tx` | `TransactWriteItems`; a different model, not in the core interface |
 
 The core model maps cleanly. The same ESR (Equality, Sort, Range; see §5)
@@ -292,7 +292,7 @@ Core options (`dal.v1`):
 | Option | On | Purpose |
 |---|---|---|
 | `(dal.v1.table)` | message | entity name, shard key |
-| `(dal.v1.field)` | field | format, primary key, unique, role, lifecycle state |
+| `(dal.v1.field)` | field | format, primary key, unique, role |
 | `(dal.v1.store)` | service | binds the service to its entity message |
 | `(dal.v1.query)` | rpc | exactly one of `get`, `list`, `create`, `update`, `delete`, `upsert` |
 
@@ -389,8 +389,7 @@ comes from the core layer and is the same for every backend.
 `optional` fields become pointers (`*T`) in the model struct, via the
 generated sqlc type overrides (no `pgtype` wrappers). The Go type follows the
 *physical* column: nullable columns are pointers, except where nil already
-means NULL (`[]byte`, slices, `json.RawMessage`), so a deprecated column whose
-`NOT NULL` was relaxed is a pointer too. Role columns get schema defaults
+means NULL (`[]byte`, slices, `json.RawMessage`). Role columns get schema defaults
 (`now()` for create/update time, `1` for version), so adding them later stays
 DAL302-safe. The physical model lives in `internal/backend/pg`
 (`pg.Build`). Enums are stored
@@ -605,11 +604,11 @@ Core (every backend):
 | DAL104 | error | `get.by` / `upsert.conflict_on` isn't covered by a unique constraint |
 | DAL107 | error | request or response message doesn't match the declared pattern. Get: the entity, or exactly the `by` fields. List: exactly the `eq` fields, `<range>_from`/`<range>_to`, `page_size` (int32), `page_token` (string); the response has one repeated entity field plus `next_page_token`. Create/Update/Upsert: the entity. Delete: the entity or exactly the key fields; the response is the entity or `google.protobuf.Empty` |
 | DAL109 | warn | an `order_by` column can be changed by an `update`/`upsert`, so rows can move between pages mid-iteration |
-| DAL110 | error | `shard_key` names a missing, deprecated or repeated field |
+| DAL110 | error | `shard_key` names a missing or repeated field |
 | DAL111–113 | error | field-number identity violations; see §8 |
 | DAL114 | warn | rpc name doesn't match its shape (`List<Entities>By<Eq…>And<Range>`); suggests the expected name |
 | DAL115 | error | a nullable column is in `order_by` without also being the `range` column |
-| DAL117 | error | a query reference (`by`, `eq`, `range`, `order_by`, `columns`, `conflict_on`) names a missing, deprecated or repeated field; a column name used by mistake gets a hint |
+| DAL117 | error | a query reference (`by`, `eq`, `range`, `order_by`, `columns`, `conflict_on`) names a missing or repeated field; a column name used by mistake gets a hint |
 | DAL118 | error | `update`/`upsert` `columns` sets a key field or a role-managed field |
 | DAL116 | error | a vendored copy of the options protos differs from the hashes in `dalforge.lock` |
 
@@ -627,7 +626,7 @@ Postgres:
 | DAL208 | error | a `custom_type` has no (or an invalid) `go_type`, a `go_type` is set without `custom_type`, or a known extension type (`vector`, `geometry`, `citext`, …) is used without declaring its extension in the file's `(dal.pg.v1.file).extensions` |
 | DAL209 | error | no or incompatible type mapping: `uint64` without `custom_type`, a `format` on a non-string field, or an explicit pg `type` that doesn't fit the field's kind (e.g. `uuid` on `int64`) |
 | DAL210 | error | two entities map to the same table, or two fields to the same column |
-| DAL211 | error | an explicit pg index references (`columns`, `include`) a missing, deprecated or repeated field. A column name used by mistake gets a hint |
+| DAL211 | error | an explicit pg index references (`columns`, `include`) a missing or repeated field. A column name used by mistake gets a hint |
 | DAL3xx | error | migration safety; see §8 |
 
 DAL4xx is reserved for a future DynamoDB backend.
@@ -783,20 +782,6 @@ func NewOrderRepository(db dalpg.DB, opts ...dalpg.Option) OrderRepository
 func WithTx(ctx context.Context, db dalpg.DB, fn func(tx Tx) error) error
 ```
 
-### Deprecated columns and sqlc's view of the schema
-
-Generated queries never read or write deprecated columns. If release N still
-selected one, release N+1's DROP would break N mid-deploy. But sqlc builds its
-model structs from the schema it's given. If that schema included deprecated
-columns, queries leaving them out would return per-query `…Row` types instead
-of the model, and the DAL's model aliases would break.
-
-So dalforge gives sqlc a **schema view without deprecated columns**, while
-the migrations keep the real columns until the drop. sqlc's models then match
-exactly what generated queries select. As a bonus, custom queries can't read a
-deprecated column by accident: sqlc rejects them at generate time. (Proposed
-2026-09-30, built in step 1.6.)
-
 ### No driver types in the API
 
 pgx is the driver layer, so no `pgx`, `pgtype` or `pgconn` type appears in
@@ -946,20 +931,66 @@ transaction, so only the outer `WithTx` can be retried.
 ## 8. Migrations and n+1 compatibility
 
 In a rolling deploy, the migration runs first. Then release N and N+1
-instances share the schema. So **every migration has to be compatible with the
-code already running (N) and with the code about to run (N+1)**. That forces
-expand/contract changes, which DALForge enforces.
+instances share the schema. DALForge's contract:
 
-**The lifecycle model is core; the migrations are backend-specific.** Postgres
-emits SQL. A DynamoDB backend would emit none for attributes, since they're
+> **Every schema change for N+1 is additive and backward compatible with the
+> code still running as N.**
+
+DALForge never removes or rewrites existing schema in a release. The two
+classic footguns, a new `NOT NULL` column without a default and a column type
+change, are lint errors. Each has a safe, additive alternative.
+
+**The contract is core; the migrations are backend-specific.** Postgres emits
+SQL. A DynamoDB backend would emit none for attributes, since they're
 schemaless, and would leave GSI changes to infrastructure-as-code.
+
+### What a release may change
+
+| Change | N+1 migration | Why N keeps working | Verdict |
+|---|---|---|---|
+| new entity | `CREATE TABLE` | N doesn't know it | allowed |
+| new `optional` field | `ADD COLUMN … NULL` | N's inserts omit it | allowed |
+| new required field **with** a constant default | `ADD COLUMN … NOT NULL DEFAULT <const>` | N's inserts get the default | allowed |
+| new required field **without** a default | — | N's inserts would fail | **DAL302**: add a default (`(dal.pg.v1.column).default`) or make it `optional` |
+| type change (kind, `format`, pg `type`) on an existing field | — | N reads and writes the old type | **DAL303**: add a new field with a new number. proto forbids number reuse, and DAL111–113 enforce it |
+| rename a column in place | — | N uses the old name | **DAL306**: add a new field. Renaming only the proto field while pinning `(dal.v1.field).name` is allowed |
+| tighten an existing column: `optional` → required, add `unique` | — | N may write values the new rule rejects, and existing rows may already violate it | **DAL301**: not backward compatible. Do it in a hand-written migration, outside the generated flow |
+| new access pattern / index | `CREATE INDEX CONCURRENTLY` | N is unaffected | allowed |
+| remove a field (delete + `reserved`) | relax `NOT NULL` if the column has no default | N still reads and writes the column; N+1 omits it | allowed: the column is **retired** |
+| remove an entity or an access pattern | nothing | N still uses the table or index | allowed: the table or index is **retired** |
+
+### Removing things: retire, never drop
+
+A removed field disappears from the IDL, from sqlc's schema, from the models
+and from every generated query in N+1. The database column stays. Its
+`NOT NULL` is relaxed if needed, so N+1's inserts (which omit it) succeed while
+N keeps using it. The snapshot records it as retired, along with the release
+that retired it. The same goes for removed entities (tables) and indexes no
+access pattern needs any more.
+
+So sqlc always sees exactly what the IDL declares, and the physical schema may
+carry retired columns. No special view is needed: retired columns simply
+aren't in the IDL. A custom query that still names a retired column fails at
+`sqlc generate`, which catches leftover uses at build time.
+
+**Dropping retired columns, tables and indexes is out of scope for v1.** It's
+not additive, so it can never be part of the generated flow. The snapshot lists
+what's retired and since when, and the manual explains how to drop them with a
+hand-written migration once no deployed code uses them. Retired indexes still
+cost writes, so the index budget lint (DAL201) counts them until dropped.
+
+**Changing a type or renaming a column is two additive steps:**
+1. Add the new field (new number).
+2. Backfill it, in a migration or in application code.
+3. Switch readers to the new field.
+4. Remove the old field. Its column retires.
 
 ### Snapshot and diff
 
 - **Snapshot:** `dalforge.snapshot.json` is committed alongside the IDL. It
-  records tables, columns (keyed by proto field number, with name, type,
-  nullability, default, lifecycle state and the migration that set it),
-  reserved numbers, and indexes.
+  records tables, columns (keyed by proto field number, with column name,
+  type, nullability, default and whether and when it was retired), reserved
+  numbers, and indexes.
 - **Generating a migration:** `dalforge migrate -name <slug>` diffs the IDL
   against the snapshot. It writes files in
   [golang-migrate](https://github.com/golang-migrate/migrate) format, then
@@ -968,11 +999,9 @@ schemaless, and would leave GSI changes to infrastructure-as-code.
   format.
 - **Linting:** `dalforge lint` runs the same diff read-only and fails if the IDL
   and snapshot disagree without a migration, which makes it suitable for CI.
-- **Release model:** each migration is assumed to be one release. Rules that
-  say "a later release" mean "a later migration file".
 
 **golang-migrate caveat:** it runs a whole file in a single exec, and Postgres
-treats a multi-statement exec as one implicit transaction. `CREATE/DROP INDEX
+treats a multi-statement exec as one implicit transaction. `CREATE INDEX
 CONCURRENTLY` can't run inside a transaction, so:
 
 - each concurrent index operation gets its own single-statement migration;
@@ -988,47 +1017,30 @@ and field number, so the diff works on numbers rather than guessing from names:
 
 | ID | Severity | Rule |
 |---|---|---|
-| DAL111 | error | a field number is reused for a different column, or one previously dropped (it should have been `reserved`) |
+| DAL111 | error | a field number is reused for a different column, or for a retired one (it should have been `reserved`) |
 | DAL112 | error | a field is removed without its number *and* name being `reserved` |
 | DAL113 | error | an existing column name moves to a different field number (renumbering) |
 
 Because of this, renames are detected exactly rather than heuristically: the
-same number with a new name is a rename (`DAL306`).
+same number with a new column name is a rename in place (`DAL306`).
 
 These rules are backend-neutral and come from the snapshot diff, so buf isn't
 needed for them. DALForge's own extension numbers (`51000`, `51010`) are
 protected by a unit test that pins them.
 
-### Field lifecycle (core)
-
-1. **Active.** This is the default.
-2. **`state: STATE_DEPRECATED`.** The generated code stops reading and writing
-   the column. It stays in storage. If the column is `NOT NULL` with no
-   default, the migration drops `NOT NULL` so N+1 inserts succeed while N still
-   reads the column.
-3. **Delete the field and `reserved` its number.** This emits
-   `ALTER TABLE ... DROP COLUMN`, but only if the snapshot shows the column was
-   deprecated in an *earlier* migration. Otherwise it's error `DAL301`.
-
-A rename is expressed as adding the new column under a new field number and
-deprecating the old one. Backfill and dual-write are left to the application.
-Renaming in place (the same number with a new name) is error `DAL306`.
-
 ### Migration safety rules (Postgres)
 
 | ID | Rule |
 |---|---|
-| DAL301 | drop column without a prior DEPRECATED release |
-| DAL302 | new `NOT NULL` column without a constant default. Old code's inserts would fail. Volatile defaults would rewrite the table |
-| DAL303 | column type change. Needs a table rewrite and breaks N; use add + deprecate |
-| DAL304 | tighten to `NOT NULL` on an existing column. Emitted as a `CHECK ... NOT VALID` + `VALIDATE` sequence, never a direct `SET NOT NULL` |
-| DAL305 | adding a unique constraint. Emitted as `CREATE UNIQUE INDEX CONCURRENTLY`, then `ADD CONSTRAINT ... USING INDEX` |
-| DAL306 | rename in place: same field number, new *column* name. Old code still uses the old column; use add + deprecate. Renaming only the proto field while pinning `(dal.v1.field).name` is allowed |
+| DAL301 | tightening an existing column: `optional` → required, or adding `unique`. N may write values the new rule rejects, and existing rows may already violate it; do it in a hand-written migration |
+| DAL302 | new required column without a constant default. N's inserts would fail; a volatile default would also rewrite the table |
+| DAL303 | type change on an existing column (kind, `format` or pg `type`). It breaks N and needs a table rewrite; add a new field instead |
+| DAL306 | rename in place: same field number, new *column* name. N still uses the old column; add a new field instead. Renaming only the proto field while pinning `(dal.v1.field).name` is allowed |
 
 **Future option: Atlas.** Atlas could replace the diff engine, via declarative
 `schema.sql` plus its lint analyzers, while still emitting golang-migrate
-files. The snapshot and lifecycle states would still come from DALForge,
-because Atlas has no notion of a field's release history.
+files. The snapshot and the retired-column history would still come from
+DALForge, because Atlas has no notion of a field's release history.
 
 ## 9. Output layout
 
@@ -1192,7 +1204,7 @@ Every increment updates the manual sections it affects.
    tokens and `dal.All`, index derivation and merging, the DAL1xx/DAL2xx lint
    rules. Upsert, soft delete, optimistic locking, and `WithTx` if it stays
    thin.
-3. **Migrations:** snapshot, diff, lifecycle states, DAL3xx rules,
+3. **Migrations:** snapshot, diff, the additive contract with retired columns, DAL3xx rules,
    golang-migrate file emission.
 4. **Extensions:** `custom_type` ergonomics (pgvector, PostGIS), buf plugin
    mode, the Atlas backend, sqlc vet rule packs, shard-key enforcement, and a
@@ -1209,7 +1221,7 @@ Every increment updates the manual sections it affects.
 | Index model | Query-first; explicit indexes only for partial/covering/sort-pinning |
 | Sort with no `order_by` | Inherit from matching explicit index, else PK + DAL103 |
 | Migrations | Snapshot diff → golang-migrate SQL; Atlas as a future backend |
-| Lifecycle | `STATE_DEPRECATED` for one release before a field can be dropped |
+| Lifecycle | Additive-only contract (revised 2026-10-01): every N+1 schema change is additive and backward compatible with N. Removing a field (delete + `reserved`) retires its column, which is kept with `NOT NULL` relaxed, never dropped. `STATE_DEPRECATED` was removed. Type changes and renames are a new field. Dropping retired columns is out of scope for v1 (hand-written migrations) |
 | Foreign keys | Non-goal (sharding) |
 | Sharding | `shard_key` declared and validated; routing and enforcement out of scope |
 | Page tokens | In scope. Base64url JSON envelope, unsigned, bound to query + filters |
@@ -1224,7 +1236,7 @@ Every increment updates the manual sections it affects.
 | Distribution | Consumers install dalforge with mise's `go:` backend (version in their `mise.toml`). The binary stays CGO-free, and its version comes from build info |
 | sqlc pinning | A prebuilt binary through mise in the consuming repo, checked against `dalforge.lock`; replaces `go tool sqlc` (cgo) |
 | Toolchain pinning | `dalforge.lock` (TOML: dalforge version, options hashes, sqlc version), committed. Mismatches fail until `dalforge lock -upgrade`. Separate from the schema snapshot. Per-PG-version option sets were rejected |
-| sqlc schema view | sqlc gets the schema without deprecated columns (migrations keep them until the drop), so its models match generated queries and custom queries can't touch deprecated columns (proposed; step 1.6) |
+| sqlc's schema | Exactly what the IDL declares; retired columns exist only in the physical schema and snapshot. The earlier "schema view without deprecated columns" proposal was dropped together with `STATE_DEPRECATED` |
 | Container runtime | Colima via mise (dedicated `dalforge` profile, repo-scoped `DOCKER_HOST`); native Docker in CI. Chosen over embedded Postgres so that future backends and fault-injection proxies share one mechanism |
 | Retries | SQLSTATE classification into Retryable / RetryableIfIdempotent / NotRetryable, plus per-op idempotency; pluggable `dal.Retrier` (closure-friendly) and classifier; built-in default; failsafe-go adapter shown in examples |
 | Onboarding | `examples/orders` standalone consumer module with a README walkthrough, kept fresh by `mise run examples` |

@@ -13,8 +13,7 @@
           "go_type": {
             "import": "github.com/google/uuid",
             "name": "UUID"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "id",
@@ -25,8 +24,7 @@
           "go_type": {
             "import": "github.com/google/uuid",
             "name": "UUID"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "sku",
@@ -37,8 +35,7 @@
           "unique": true,
           "go_type": {
             "name": "string"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "name",
@@ -48,8 +45,7 @@
           "not_null": true,
           "go_type": {
             "name": "string"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "color",
@@ -59,19 +55,7 @@
           "go_type": {
             "name": "string",
             "pointer": true
-          },
-          "state": "active"
-        },
-        {
-          "name": "legacy_code",
-          "field": "legacy_code",
-          "number": 6,
-          "type": "text",
-          "go_type": {
-            "name": "string",
-            "pointer": true
-          },
-          "state": "deprecated"
+          }
         },
         {
           "name": "version",
@@ -82,8 +66,7 @@
           "default": "1",
           "go_type": {
             "name": "int64"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "created_at",
@@ -95,8 +78,7 @@
           "go_type": {
             "import": "time",
             "name": "Time"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "updated_at",
@@ -108,8 +90,7 @@
           "go_type": {
             "import": "time",
             "name": "Time"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "deleted_at",
@@ -120,8 +101,7 @@
             "import": "time",
             "name": "Time",
             "pointer": true
-          },
-          "state": "active"
+          }
         }
       ],
       "primary_key": [

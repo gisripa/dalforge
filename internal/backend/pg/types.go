@@ -110,8 +110,6 @@ func goType(f *ir.Field) GoType {
 
 // withNull makes g hold NULL when the column is nullable: a pointer, except
 // for types where nil already means NULL (slices, []byte, json.RawMessage).
-// It follows the physical column, so a deprecated column whose NOT NULL was
-// relaxed becomes a pointer too.
 func withNull(g GoType, notNull bool) GoType {
 	nilable := g.Slice || g.Name == "[]byte" || (g.Import == "encoding/json" && g.Name == "RawMessage")
 	g.Pointer = !notNull && !nilable

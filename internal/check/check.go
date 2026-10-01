@@ -2,8 +2,8 @@
 // pass before any emitter runs. Every rule reports through diag.
 //
 //	DAL107  request/response messages match the declared access pattern
-//	DAL110  shard_key names existing, active fields
-//	DAL117  query references name existing, active fields, once each
+//	DAL110  shard_key names existing fields, once each
+//	DAL117  query references name existing fields, once each
 //	DAL118  update/upsert never set key or role-managed fields
 package check
 
@@ -72,15 +72,13 @@ func references(l *diag.List, e *ir.Entity, q *ir.Query) {
 	}
 }
 
-// refs reports names that are unknown, deprecated or repeated.
+// refs reports names that are unknown or repeated.
 func refs(l *diag.List, rule string, pos ir.Pos, e *ir.Entity, what string, names []string) {
 	seen := map[string]bool{}
 	for _, name := range names {
 		switch f := e.Field(name); {
 		case f == nil:
 			l.Add(rule, diag.Error, pos, "%s: %s has no field %q%s", what, e.FullName, name, suggest(e, name))
-		case f.State == ir.StateDeprecated:
-			l.Add(rule, diag.Error, pos, "%s: field %q is deprecated; deprecated fields are excluded from generated reads and writes", what, name)
 		case seen[name]:
 			l.Add(rule, diag.Error, pos, "%s: field %q is listed more than once", what, name)
 		}

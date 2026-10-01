@@ -1,4 +1,4 @@
-// DAL211: explicit index references use field names, once each, active only.
+// DAL211: explicit index references use existing field names, once each.
 syntax = "proto3";
 
 package dal211;
@@ -14,7 +14,7 @@ message Order {
       {
         name: "orders_by_state"
         columns: ["order_state", "created_at DESC", "created_at"]
-        include: ["legacy", "note"]
+        include: ["ghost", "note"]
       },
       // Valid control: field names, with the renamed column resolved.
       {
@@ -27,6 +27,5 @@ message Order {
   string id = 1 [(dal.v1.field).primary_key = true];
   string state = 2 [(dal.v1.field).name = "order_state"];
   google.protobuf.Timestamp created_at = 3;
-  string legacy = 4 [(dal.v1.field).state = STATE_DEPRECATED];
   string note = 5;
 }

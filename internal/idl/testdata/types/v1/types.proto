@@ -34,8 +34,9 @@ message HTTPRequestLog {
     ]
   };
 
-  reserved 40 to 42, 50;
-  reserved "legacy_path";
+  // Removed fields: numbers and names are reserved; their columns are retired.
+  reserved 31, 40 to 42, 50;
+  reserved "old_status", "legacy_path";
 
   message Nested {
     string key = 1;
@@ -88,6 +89,5 @@ message HTTPRequestLog {
     custom_type: "vector(3)"
     go_type: "github.com/pgvector/pgvector-go.Vector"
   }];
-  string old_status = 31 [(dal.v1.field).state = STATE_DEPRECATED];
   double ratio = 32 [(dal.pg.v1.column).type = TYPE_DOUBLE_PRECISION];
 }

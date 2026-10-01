@@ -232,7 +232,6 @@ func (l *loader) field(fd protoreflect.FieldDescriptor) *ir.Field {
 		PrimaryKey: opts.GetPrimaryKey(),
 		Unique:     opts.GetUnique(),
 		Role:       ir.Role(opts.GetRole()),
-		State:      state(opts.GetState()),
 		Pos:        pos(fd),
 	}
 	if f.Column == "" {
@@ -298,13 +297,6 @@ func enum(ed protoreflect.EnumDescriptor) *ir.Enum {
 		e.Values = append(e.Values, string(ed.Values().Get(i).Name()))
 	}
 	return e
-}
-
-func state(s dalv1.State) ir.State {
-	if s == dalv1.State_STATE_DEPRECATED {
-		return ir.StateDeprecated
-	}
-	return ir.StateActive
 }
 
 func consistency(c dalv1.Consistency) ir.Consistency {
@@ -470,12 +462,12 @@ func refsOr(declared, def []string) ir.FieldRefs {
 	return ir.FieldRefs{Names: def, Source: ir.SourceDefaulted}
 }
 
-// writable is the default field set of Update and Upsert: active fields that
-// are neither key fields nor managed by a role.
+// writable is the default field set of Update and Upsert: fields that are
+// neither key fields nor managed by a role.
 func writable(e *ir.Entity) []string {
 	var names []string
 	for _, f := range e.Fields {
-		if !f.PrimaryKey && f.Role == ir.RoleNone && f.State == ir.StateActive {
+		if !f.PrimaryKey && f.Role == ir.RoleNone {
 			names = append(names, f.Name)
 		}
 	}

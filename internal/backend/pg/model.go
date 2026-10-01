@@ -44,15 +44,14 @@ type Table struct {
 
 // Column is one field's column.
 type Column struct {
-	Name    string   `json:"name"`
-	Field   string   `json:"field"` // proto field name
-	Number  int32    `json:"number"`
-	Type    string   `json:"type"` // SQL type, e.g. "uuid", "text[]", "vector(3)"
-	NotNull bool     `json:"not_null,omitempty"`
-	Default string   `json:"default,omitempty"` // SQL expression
-	Unique  bool     `json:"unique,omitempty"`
-	GoType  GoType   `json:"go_type"`
-	State   ir.State `json:"state"`
+	Name    string `json:"name"`
+	Field   string `json:"field"` // proto field name
+	Number  int32  `json:"number"`
+	Type    string `json:"type"` // SQL type, e.g. "uuid", "text[]", "vector(3)"
+	NotNull bool   `json:"not_null,omitempty"`
+	Default string `json:"default,omitempty"` // SQL expression
+	Unique  bool   `json:"unique,omitempty"`
+	GoType  GoType `json:"go_type"`
 }
 
 // Index is an index on a table.

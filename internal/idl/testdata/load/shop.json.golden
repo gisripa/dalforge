@@ -13,7 +13,6 @@
             "kind": "string",
             "format": "uuid",
             "primary_key": true,
-            "state": "active",
             "pos": {
               "file": "shop/v1/account.proto",
               "line": 11,
@@ -25,7 +24,6 @@
             "column": "name",
             "number": 2,
             "kind": "string",
-            "state": "active",
             "pos": {
               "file": "shop/v1/account.proto",
               "line": 15,

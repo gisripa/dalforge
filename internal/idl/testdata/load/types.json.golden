@@ -12,10 +12,9 @@
             "number": 1,
             "kind": "int64",
             "primary_key": true,
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 44,
+              "line": 45,
               "col": 3
             }
           },
@@ -24,10 +23,9 @@
             "column": "ok",
             "number": 2,
             "kind": "bool",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 45,
+              "line": 46,
               "col": 3
             }
           },
@@ -36,10 +34,9 @@
             "column": "i32",
             "number": 3,
             "kind": "int32",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 46,
+              "line": 47,
               "col": 3
             }
           },
@@ -48,10 +45,9 @@
             "column": "s32",
             "number": 4,
             "kind": "int32",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 47,
+              "line": 48,
               "col": 3
             }
           },
@@ -60,10 +56,9 @@
             "column": "sf32",
             "number": 5,
             "kind": "int32",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 48,
+              "line": 49,
               "col": 3
             }
           },
@@ -72,10 +67,9 @@
             "column": "i64",
             "number": 6,
             "kind": "int64",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 49,
+              "line": 50,
               "col": 3
             }
           },
@@ -84,10 +78,9 @@
             "column": "s64",
             "number": 7,
             "kind": "int64",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 50,
+              "line": 51,
               "col": 3
             }
           },
@@ -96,10 +89,9 @@
             "column": "sf64",
             "number": 8,
             "kind": "int64",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 51,
+              "line": 52,
               "col": 3
             }
           },
@@ -108,10 +100,9 @@
             "column": "u32",
             "number": 9,
             "kind": "uint32",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 52,
+              "line": 53,
               "col": 3
             }
           },
@@ -120,10 +111,9 @@
             "column": "f32",
             "number": 10,
             "kind": "uint32",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 53,
+              "line": 54,
               "col": 3
             }
           },
@@ -132,10 +122,9 @@
             "column": "u64",
             "number": 11,
             "kind": "uint64",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 55,
+              "line": 56,
               "col": 3
             }
           },
@@ -144,10 +133,9 @@
             "column": "f64",
             "number": 12,
             "kind": "uint64",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 59,
+              "line": 60,
               "col": 3
             }
           },
@@ -156,10 +144,9 @@
             "column": "fl",
             "number": 13,
             "kind": "float",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 63,
+              "line": 64,
               "col": 3
             }
           },
@@ -168,10 +155,9 @@
             "column": "db",
             "number": 14,
             "kind": "double",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 64,
+              "line": 65,
               "col": 3
             }
           },
@@ -180,10 +166,9 @@
             "column": "path",
             "number": 15,
             "kind": "string",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 65,
+              "line": 66,
               "col": 3
             }
           },
@@ -192,10 +177,9 @@
             "column": "body",
             "number": 16,
             "kind": "bytes",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 66,
+              "line": 67,
               "col": 3
             }
           },
@@ -212,10 +196,9 @@
                 "COLOR_BLUE"
               ]
             },
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 67,
+              "line": 68,
               "col": 3
             }
           },
@@ -224,10 +207,9 @@
             "column": "created_at",
             "number": 18,
             "kind": "timestamp",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 68,
+              "line": 69,
               "col": 3
             }
           },
@@ -237,10 +219,9 @@
             "number": 19,
             "kind": "timestamp",
             "nullable": true,
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 69,
+              "line": 70,
               "col": 3
             }
           },
@@ -250,10 +231,9 @@
             "number": 20,
             "kind": "string",
             "nullable": true,
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 70,
+              "line": 71,
               "col": 3
             }
           },
@@ -263,10 +243,9 @@
             "number": 21,
             "kind": "string",
             "repeated": true,
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 71,
+              "line": 72,
               "col": 3
             }
           },
@@ -275,10 +254,9 @@
             "column": "headers",
             "number": 22,
             "kind": "json",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 72,
+              "line": 73,
               "col": 3
             }
           },
@@ -287,10 +265,9 @@
             "column": "meta",
             "number": 23,
             "kind": "json",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 73,
+              "line": 74,
               "col": 3
             }
           },
@@ -299,10 +276,9 @@
             "column": "nested",
             "number": 24,
             "kind": "json",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 74,
+              "line": 75,
               "col": 3
             }
           },
@@ -312,10 +288,9 @@
             "number": 25,
             "kind": "json",
             "repeated": true,
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 75,
+              "line": 76,
               "col": 3
             }
           },
@@ -324,10 +299,9 @@
             "column": "status",
             "number": 26,
             "kind": "int32",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 76,
+              "line": 77,
               "col": 3
             }
           },
@@ -338,10 +312,9 @@
             "kind": "string",
             "format": "uuid",
             "unique": true,
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 77,
+              "line": 78,
               "col": 3
             }
           },
@@ -351,10 +324,9 @@
             "number": 28,
             "kind": "string",
             "format": "decimal",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 82,
+              "line": 83,
               "col": 3
             }
           },
@@ -364,10 +336,9 @@
             "number": 29,
             "kind": "string",
             "format": "json",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 86,
+              "line": 87,
               "col": 3
             }
           },
@@ -376,22 +347,9 @@
             "column": "embedding",
             "number": 30,
             "kind": "string",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 87,
-              "col": 3
-            }
-          },
-          {
-            "name": "old_status",
-            "column": "old_status",
-            "number": 31,
-            "kind": "string",
-            "state": "deprecated",
-            "pos": {
-              "file": "types/v1/types.proto",
-              "line": 91,
+              "line": 88,
               "col": 3
             }
           },
@@ -400,7 +358,6 @@
             "column": "ratio",
             "number": 32,
             "kind": "double",
-            "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
               "line": 92,
@@ -411,6 +368,10 @@
         "reserved": {
           "numbers": [
             [
+              31,
+              31
+            ],
+            [
               40,
               42
             ],
@@ -420,6 +381,7 @@
             ]
           ],
           "names": [
+            "old_status",
             "legacy_path"
           ]
         },

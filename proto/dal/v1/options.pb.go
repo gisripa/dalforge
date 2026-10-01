@@ -156,60 +156,6 @@ func (Role) EnumDescriptor() ([]byte, []int) {
 	return file_dal_v1_options_proto_rawDescGZIP(), []int{1}
 }
 
-// State is the lifecycle of a column across rolling deploys.
-type State int32
-
-const (
-	// Unset means active.
-	State_STATE_UNSPECIFIED State = 0
-	State_STATE_ACTIVE      State = 1
-	// Still stored, but excluded from generated reads and writes. A column must
-	// ship as DEPRECATED in one release before the field can be removed (and
-	// its number reserved).
-	State_STATE_DEPRECATED State = 2
-)
-
-// Enum value maps for State.
-var (
-	State_name = map[int32]string{
-		0: "STATE_UNSPECIFIED",
-		1: "STATE_ACTIVE",
-		2: "STATE_DEPRECATED",
-	}
-	State_value = map[string]int32{
-		"STATE_UNSPECIFIED": 0,
-		"STATE_ACTIVE":      1,
-		"STATE_DEPRECATED":  2,
-	}
-)
-
-func (x State) Enum() *State {
-	p := new(State)
-	*p = x
-	return p
-}
-
-func (x State) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (State) Descriptor() protoreflect.EnumDescriptor {
-	return file_dal_v1_options_proto_enumTypes[2].Descriptor()
-}
-
-func (State) Type() protoreflect.EnumType {
-	return &file_dal_v1_options_proto_enumTypes[2]
-}
-
-func (x State) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use State.Descriptor instead.
-func (State) EnumDescriptor() ([]byte, []int) {
-	return file_dal_v1_options_proto_rawDescGZIP(), []int{2}
-}
-
 // Consistency is the read consistency an rpc needs.
 type Consistency int32
 
@@ -248,11 +194,11 @@ func (x Consistency) String() string {
 }
 
 func (Consistency) Descriptor() protoreflect.EnumDescriptor {
-	return file_dal_v1_options_proto_enumTypes[3].Descriptor()
+	return file_dal_v1_options_proto_enumTypes[2].Descriptor()
 }
 
 func (Consistency) Type() protoreflect.EnumType {
-	return &file_dal_v1_options_proto_enumTypes[3]
+	return &file_dal_v1_options_proto_enumTypes[2]
 }
 
 func (x Consistency) Number() protoreflect.EnumNumber {
@@ -261,7 +207,7 @@ func (x Consistency) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Consistency.Descriptor instead.
 func (Consistency) EnumDescriptor() ([]byte, []int) {
-	return file_dal_v1_options_proto_rawDescGZIP(), []int{3}
+	return file_dal_v1_options_proto_rawDescGZIP(), []int{2}
 }
 
 // Table configures the entity backing a message.
@@ -270,7 +216,7 @@ type Table struct {
 	// Table name. Defaults to the snake_case message name.
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// Fields the data is sharded by. Recorded and validated (the fields must
-	// exist and be active); routing and enforcement are out of scope for now.
+	// exist); routing and enforcement are out of scope for now.
 	ShardKey      []string `protobuf:"bytes,2,rep,name=shard_key,json=shardKey,proto3" json:"shard_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -323,6 +269,10 @@ func (x *Table) GetShardKey() []string {
 // Field configures the column backing a field. Nullability comes from the
 // proto field itself: proto3 `optional` fields are nullable, all others are
 // required.
+//
+// To remove a field, delete it and reserve its number and name. Its column is
+// retired, not dropped: schema changes are always additive, so code from the
+// previous release keeps working (see docs/design.md §8).
 type Field struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Column name. Defaults to the proto field name.
@@ -335,9 +285,7 @@ type Field struct {
 	PrimaryKey bool `protobuf:"varint,3,opt,name=primary_key,json=primaryKey,proto3" json:"primary_key,omitempty"`
 	Unique     bool `protobuf:"varint,4,opt,name=unique,proto3" json:"unique,omitempty"`
 	// Behaviour the generated code manages for this column.
-	Role Role `protobuf:"varint,5,opt,name=role,proto3,enum=dal.v1.Role" json:"role,omitempty"`
-	// Lifecycle state used for rolling-deploy safe changes.
-	State         State `protobuf:"varint,6,opt,name=state,proto3,enum=dal.v1.State" json:"state,omitempty"`
+	Role          Role `protobuf:"varint,5,opt,name=role,proto3,enum=dal.v1.Role" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -405,13 +353,6 @@ func (x *Field) GetRole() Role {
 		return x.Role
 	}
 	return Role_ROLE_UNSPECIFIED
-}
-
-func (x *Field) GetState() State {
-	if x != nil {
-		return x.State
-	}
-	return State_STATE_UNSPECIFIED
 }
 
 // Store binds a service to the entity whose access patterns it declares.
@@ -1000,15 +941,14 @@ const file_dal_v1_options_proto_rawDesc = "" +
 	"\x14dal/v1/options.proto\x12\x06dal.v1\x1a google/protobuf/descriptor.proto\"8\n" +
 	"\x05Table\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
-	"\tshard_key\x18\x02 \x03(\tR\bshardKey\"\xc3\x01\n" +
+	"\tshard_key\x18\x02 \x03(\tR\bshardKey\"\xab\x01\n" +
 	"\x05Field\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12&\n" +
 	"\x06format\x18\x02 \x01(\x0e2\x0e.dal.v1.FormatR\x06format\x12\x1f\n" +
 	"\vprimary_key\x18\x03 \x01(\bR\n" +
 	"primaryKey\x12\x16\n" +
 	"\x06unique\x18\x04 \x01(\bR\x06unique\x12 \n" +
-	"\x04role\x18\x05 \x01(\x0e2\f.dal.v1.RoleR\x04role\x12#\n" +
-	"\x05state\x18\x06 \x01(\x0e2\r.dal.v1.StateR\x05state\"\x1f\n" +
+	"\x04role\x18\x05 \x01(\x0e2\f.dal.v1.RoleR\x04roleJ\x04\b\x06\x10\aR\x05state\"\x1f\n" +
 	"\x05Store\x12\x16\n" +
 	"\x06entity\x18\x01 \x01(\tR\x06entity\"\xfc\x01\n" +
 	"\x05Query\x12\x1f\n" +
@@ -1047,11 +987,7 @@ const file_dal_v1_options_proto_rawDesc = "" +
 	"\x10ROLE_CREATE_TIME\x10\x01\x12\x14\n" +
 	"\x10ROLE_UPDATE_TIME\x10\x02\x12\x14\n" +
 	"\x10ROLE_DELETE_TIME\x10\x03\x12\x10\n" +
-	"\fROLE_VERSION\x10\x04*F\n" +
-	"\x05State\x12\x15\n" +
-	"\x11STATE_UNSPECIFIED\x10\x00\x12\x10\n" +
-	"\fSTATE_ACTIVE\x10\x01\x12\x14\n" +
-	"\x10STATE_DEPRECATED\x10\x02*\\\n" +
+	"\fROLE_VERSION\x10\x04*\\\n" +
 	"\vConsistency\x12\x1b\n" +
 	"\x17CONSISTENCY_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14CONSISTENCY_EVENTUAL\x10\x01\x12\x16\n" +
@@ -1073,53 +1009,51 @@ func file_dal_v1_options_proto_rawDescGZIP() []byte {
 	return file_dal_v1_options_proto_rawDescData
 }
 
-var file_dal_v1_options_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_dal_v1_options_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_dal_v1_options_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_dal_v1_options_proto_goTypes = []any{
 	(Format)(0),                         // 0: dal.v1.Format
 	(Role)(0),                           // 1: dal.v1.Role
-	(State)(0),                          // 2: dal.v1.State
-	(Consistency)(0),                    // 3: dal.v1.Consistency
-	(*Table)(nil),                       // 4: dal.v1.Table
-	(*Field)(nil),                       // 5: dal.v1.Field
-	(*Store)(nil),                       // 6: dal.v1.Store
-	(*Query)(nil),                       // 7: dal.v1.Query
-	(*Get)(nil),                         // 8: dal.v1.Get
-	(*List)(nil),                        // 9: dal.v1.List
-	(*Create)(nil),                      // 10: dal.v1.Create
-	(*Update)(nil),                      // 11: dal.v1.Update
-	(*Delete)(nil),                      // 12: dal.v1.Delete
-	(*Upsert)(nil),                      // 13: dal.v1.Upsert
-	(*descriptorpb.MessageOptions)(nil), // 14: google.protobuf.MessageOptions
-	(*descriptorpb.FieldOptions)(nil),   // 15: google.protobuf.FieldOptions
-	(*descriptorpb.ServiceOptions)(nil), // 16: google.protobuf.ServiceOptions
-	(*descriptorpb.MethodOptions)(nil),  // 17: google.protobuf.MethodOptions
+	(Consistency)(0),                    // 2: dal.v1.Consistency
+	(*Table)(nil),                       // 3: dal.v1.Table
+	(*Field)(nil),                       // 4: dal.v1.Field
+	(*Store)(nil),                       // 5: dal.v1.Store
+	(*Query)(nil),                       // 6: dal.v1.Query
+	(*Get)(nil),                         // 7: dal.v1.Get
+	(*List)(nil),                        // 8: dal.v1.List
+	(*Create)(nil),                      // 9: dal.v1.Create
+	(*Update)(nil),                      // 10: dal.v1.Update
+	(*Delete)(nil),                      // 11: dal.v1.Delete
+	(*Upsert)(nil),                      // 12: dal.v1.Upsert
+	(*descriptorpb.MessageOptions)(nil), // 13: google.protobuf.MessageOptions
+	(*descriptorpb.FieldOptions)(nil),   // 14: google.protobuf.FieldOptions
+	(*descriptorpb.ServiceOptions)(nil), // 15: google.protobuf.ServiceOptions
+	(*descriptorpb.MethodOptions)(nil),  // 16: google.protobuf.MethodOptions
 }
 var file_dal_v1_options_proto_depIdxs = []int32{
 	0,  // 0: dal.v1.Field.format:type_name -> dal.v1.Format
 	1,  // 1: dal.v1.Field.role:type_name -> dal.v1.Role
-	2,  // 2: dal.v1.Field.state:type_name -> dal.v1.State
-	8,  // 3: dal.v1.Query.get:type_name -> dal.v1.Get
-	9,  // 4: dal.v1.Query.list:type_name -> dal.v1.List
-	10, // 5: dal.v1.Query.create:type_name -> dal.v1.Create
-	11, // 6: dal.v1.Query.update:type_name -> dal.v1.Update
-	12, // 7: dal.v1.Query.delete:type_name -> dal.v1.Delete
-	13, // 8: dal.v1.Query.upsert:type_name -> dal.v1.Upsert
-	3,  // 9: dal.v1.Get.consistency:type_name -> dal.v1.Consistency
-	3,  // 10: dal.v1.List.consistency:type_name -> dal.v1.Consistency
-	14, // 11: dal.v1.table:extendee -> google.protobuf.MessageOptions
-	15, // 12: dal.v1.field:extendee -> google.protobuf.FieldOptions
-	16, // 13: dal.v1.store:extendee -> google.protobuf.ServiceOptions
-	17, // 14: dal.v1.query:extendee -> google.protobuf.MethodOptions
-	4,  // 15: dal.v1.table:type_name -> dal.v1.Table
-	5,  // 16: dal.v1.field:type_name -> dal.v1.Field
-	6,  // 17: dal.v1.store:type_name -> dal.v1.Store
-	7,  // 18: dal.v1.query:type_name -> dal.v1.Query
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	15, // [15:19] is the sub-list for extension type_name
-	11, // [11:15] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	7,  // 2: dal.v1.Query.get:type_name -> dal.v1.Get
+	8,  // 3: dal.v1.Query.list:type_name -> dal.v1.List
+	9,  // 4: dal.v1.Query.create:type_name -> dal.v1.Create
+	10, // 5: dal.v1.Query.update:type_name -> dal.v1.Update
+	11, // 6: dal.v1.Query.delete:type_name -> dal.v1.Delete
+	12, // 7: dal.v1.Query.upsert:type_name -> dal.v1.Upsert
+	2,  // 8: dal.v1.Get.consistency:type_name -> dal.v1.Consistency
+	2,  // 9: dal.v1.List.consistency:type_name -> dal.v1.Consistency
+	13, // 10: dal.v1.table:extendee -> google.protobuf.MessageOptions
+	14, // 11: dal.v1.field:extendee -> google.protobuf.FieldOptions
+	15, // 12: dal.v1.store:extendee -> google.protobuf.ServiceOptions
+	16, // 13: dal.v1.query:extendee -> google.protobuf.MethodOptions
+	3,  // 14: dal.v1.table:type_name -> dal.v1.Table
+	4,  // 15: dal.v1.field:type_name -> dal.v1.Field
+	5,  // 16: dal.v1.store:type_name -> dal.v1.Store
+	6,  // 17: dal.v1.query:type_name -> dal.v1.Query
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	14, // [14:18] is the sub-list for extension type_name
+	10, // [10:14] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_dal_v1_options_proto_init() }
@@ -1140,7 +1074,7 @@ func file_dal_v1_options_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dal_v1_options_proto_rawDesc), len(file_dal_v1_options_proto_rawDesc)),
-			NumEnums:      4,
+			NumEnums:      3,
 			NumMessages:   10,
 			NumExtensions: 4,
 			NumServices:   0,

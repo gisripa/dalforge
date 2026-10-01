@@ -15,8 +15,7 @@
           "not_null": true,
           "go_type": {
             "name": "int64"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "ok",
@@ -26,8 +25,7 @@
           "not_null": true,
           "go_type": {
             "name": "bool"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "i32",
@@ -37,8 +35,7 @@
           "not_null": true,
           "go_type": {
             "name": "int32"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "s32",
@@ -48,8 +45,7 @@
           "not_null": true,
           "go_type": {
             "name": "int32"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "sf32",
@@ -59,8 +55,7 @@
           "not_null": true,
           "go_type": {
             "name": "int32"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "i64",
@@ -70,8 +65,7 @@
           "not_null": true,
           "go_type": {
             "name": "int64"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "s64",
@@ -81,8 +75,7 @@
           "not_null": true,
           "go_type": {
             "name": "int64"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "sf64",
@@ -92,8 +85,7 @@
           "not_null": true,
           "go_type": {
             "name": "int64"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "u32",
@@ -103,8 +95,7 @@
           "not_null": true,
           "go_type": {
             "name": "int64"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "f32",
@@ -114,8 +105,7 @@
           "not_null": true,
           "go_type": {
             "name": "int64"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "u64",
@@ -125,8 +115,7 @@
           "not_null": true,
           "go_type": {
             "name": "string"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "f64",
@@ -136,8 +125,7 @@
           "not_null": true,
           "go_type": {
             "name": "string"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "fl",
@@ -147,8 +135,7 @@
           "not_null": true,
           "go_type": {
             "name": "float32"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "db",
@@ -158,8 +145,7 @@
           "not_null": true,
           "go_type": {
             "name": "float64"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "path",
@@ -169,8 +155,7 @@
           "not_null": true,
           "go_type": {
             "name": "string"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "body",
@@ -180,8 +165,7 @@
           "not_null": true,
           "go_type": {
             "name": "[]byte"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "color",
@@ -191,8 +175,7 @@
           "not_null": true,
           "go_type": {
             "name": "string"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "created_at",
@@ -203,8 +186,7 @@
           "go_type": {
             "import": "time",
             "name": "Time"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "finished_at",
@@ -215,8 +197,7 @@
             "import": "time",
             "name": "Time",
             "pointer": true
-          },
-          "state": "active"
+          }
         },
         {
           "name": "note",
@@ -226,8 +207,7 @@
           "go_type": {
             "name": "string",
             "pointer": true
-          },
-          "state": "active"
+          }
         },
         {
           "name": "tags",
@@ -238,8 +218,7 @@
           "go_type": {
             "name": "string",
             "slice": true
-          },
-          "state": "active"
+          }
         },
         {
           "name": "headers",
@@ -250,8 +229,7 @@
           "go_type": {
             "import": "encoding/json",
             "name": "RawMessage"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "meta",
@@ -262,8 +240,7 @@
           "go_type": {
             "import": "encoding/json",
             "name": "RawMessage"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "nested",
@@ -274,8 +251,7 @@
           "go_type": {
             "import": "encoding/json",
             "name": "RawMessage"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "nested_list",
@@ -286,8 +262,7 @@
           "go_type": {
             "import": "encoding/json",
             "name": "RawMessage"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "status",
@@ -297,8 +272,7 @@
           "not_null": true,
           "go_type": {
             "name": "int32"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "req_id",
@@ -310,8 +284,7 @@
           "go_type": {
             "import": "github.com/google/uuid",
             "name": "UUID"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "amount",
@@ -321,8 +294,7 @@
           "not_null": true,
           "go_type": {
             "name": "string"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "payload",
@@ -333,8 +305,7 @@
           "go_type": {
             "import": "encoding/json",
             "name": "RawMessage"
-          },
-          "state": "active"
+          }
         },
         {
           "name": "embedding",
@@ -345,19 +316,7 @@
           "go_type": {
             "import": "github.com/pgvector/pgvector-go",
             "name": "Vector"
-          },
-          "state": "active"
-        },
-        {
-          "name": "old_status",
-          "field": "old_status",
-          "number": 31,
-          "type": "text",
-          "go_type": {
-            "name": "string",
-            "pointer": true
-          },
-          "state": "deprecated"
+          }
         },
         {
           "name": "ratio",
@@ -367,8 +326,7 @@
           "not_null": true,
           "go_type": {
             "name": "float64"
-          },
-          "state": "active"
+          }
         }
       ],
       "primary_key": [

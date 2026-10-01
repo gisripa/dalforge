@@ -50,7 +50,6 @@ func TestEnumText(t *testing.T) {
 		{name: "kind", v: KindTimestamp, want: "timestamp"},
 		{name: "format", v: FormatUUID, want: "uuid"},
 		{name: "role", v: RoleDeleteTime, want: "delete_time"},
-		{name: "state", v: StateDeprecated, want: "deprecated"},
 		{name: "consistency", v: ConsistencyStrong, want: "strong"},
 		{name: "source", v: SourceInherited, want: "inherited"},
 	}

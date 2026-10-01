@@ -1,4 +1,4 @@
-// DAL117: query references must name existing, active fields, once each.
+// DAL117: query references must name existing fields, once each.
 syntax = "proto3";
 
 package dal117;
@@ -9,7 +9,6 @@ message Order {
   string id = 1 [(dal.v1.field).primary_key = true];
   string account_id = 2;
   string state = 3 [(dal.v1.field).name = "order_state"];
-  string legacy = 4 [(dal.v1.field).state = STATE_DEPRECATED];
   string note = 5;
 }
 
@@ -31,13 +30,13 @@ service OrderStore {
     option (dal.v1.query) = {
       list: {
         range: "nope"
-        order_by: ["legacy DESC", "id", "id"]
+        order_by: ["note DESC", "id", "id"]
       }
     };
   }
-  rpc UpdateDeprecated(Order) returns (Order) {
+  rpc UpdateDuplicate(Order) returns (Order) {
     option (dal.v1.query) = {
-      update: {columns: ["note", "legacy", "note"]}
+      update: {columns: ["note", "note"]}
     };
   }
   rpc UpsertBadConflict(Order) returns (Order) {
