@@ -39,7 +39,9 @@ backend is built for now (§3).
 **Non-goals**
 - Complex queries (joins, aggregates, CTEs). Write those as custom sqlc
   queries.
-- Foreign keys. They don't work well with sharded tables.
+- Foreign keys, and generated referential-integrity checks. FKs don't work
+  well with sharded tables. Application-level integrity is shown as a pattern
+  in `examples/` (§11) rather than generated.
 - Shard routing. A `shard_key` can be declared and is validated, but nothing
   routes or enforces by it yet.
 - Batch operations (`CreateMany`, `GetMany`).
@@ -65,20 +67,81 @@ backend is built for now (§3).
                         core emitter: domain structs + repository interfaces
 ```
 
-- **A standalone CLI** (`dalforge generate | lint | migrate`) that embeds
+- **A standalone CLI** (`dalforge generate | lint | migrate | lock`) that embeds
   `github.com/bufbuild/protocompile`, so neither buf nor protoc is needed at
   generation time. Being a CLI rather than a protoc plugin lets it read and
   write state on disk, namely the schema snapshot that migration diffing
   depends on. A buf plugin mode can be added later over the same core.
 - **The options protos ship inside the binary**, so users can
-  `import "dal/v1/options.proto"` without vendoring it. They can also be
+  `import "dal/v1/options.proto"` without vendoring it. Their Go bindings sit
+  next to them (`github.com/gisripa/dalforge/proto/dal/v1`, package `dalv1`;
+  `…/proto/dal/pg/v1`, package `pgv1`). Users who run protoc-gen-go on their
+  own IDL can import them, so they're public, not `internal/`. They can also be
   published to the BSR for editor and `buf lint` support.
-- **sqlc is pinned as a Go `tool` dependency** of the user's module and run as
-  `go tool sqlc generate`. That keeps the version reproducible without a global
-  install.
+- **sqlc is pinned in the consuming repo's `mise.toml`** (`sqlc = "1.30.0"`,
+  a prebuilt binary from mise's registry), the same way dalforge itself is
+  installed. dalforge runs `sqlc` from `PATH` and checks `sqlc version`
+  against `dalforge.lock`. This replaces the earlier `go tool sqlc` plan:
+  sqlc's Postgres parser (`pg_query_go`) uses cgo, so `go tool` would compile
+  C code on first use, which is slow and needs a C compiler.
 - **The core IR is the contract between stages.** Lint rules and emitters only
   see the IR, never the descriptors. That makes both testable with plain Go
   values.
+
+### Reproducible generation: `dalforge.lock`
+
+Two checked-in files hold state, each with one job:
+
+| File | Like | Records |
+|---|---|---|
+| `dalforge.snapshot.json` | Terraform state | what the schema looks like (for migrations, §8) |
+| `dalforge.lock` | `.terraform.lock.hcl` | which toolchain produced the generated code |
+
+```toml
+# dalforge.lock: maintained by dalforge, do not edit. Commit it.
+lock_version = 1
+dalforge     = "0.3.1"
+
+[options]   # hashes of the bundled options protos used for generation
+"dal/v1/options.proto"    = "sha256:9f2c…"
+"dal/pg/v1/options.proto" = "sha256:41ab…"
+
+[tools]
+sqlc = "1.30.0"
+```
+
+**Behaviour:**
+- **Creation:** `dalforge generate` writes the lock if it's missing.
+- **Mismatch:** if the running binary's version or bundled options hashes
+  differ from the lock, `generate`, `lint` and `migrate` fail. `dalforge lock
+  -upgrade` is the explicit way forward, and the lock change shows up in
+  review. A teammate or CI job with a different dalforge can't silently
+  regenerate different code.
+- **Vendored copies:** copies of the options protos kept for editor or buf
+  tooling are checked against the lock's hashes (`DAL116`).
+- **Distribution:** dalforge is meant to be installed with mise's `go:`
+  backend, pinned in the consuming repo's `mise.toml`:
+
+  ```toml
+  [tools]
+  "go:github.com/gisripa/dalforge/cmd/dalforge" = "0.3.1"
+  ```
+
+  The version lives in `mise.toml`, not the user's `go.mod`, so `go.sum`
+  never pins it. That's why dalforge needs its own lock. The lock is still
+  install-agnostic, so a release binary or Homebrew install is checked the
+  same way.
+- **Version detection:** `go install` stamps the module version into the
+  binary, and dalforge reads it with `debug.ReadBuildInfo()` (no ldflags). A
+  local build reports `(devel)`. The lock check then warns instead of failing,
+  so work on dalforge itself isn't blocked.
+- **No cgo:** dalforge must stay pure Go, because `go install` compiles on the
+  user's machine and cgo would require a C toolchain and slow installs. Its
+  current dependencies (protocompile, pgx) are pure Go, and any new dependency
+  has to be too.
+
+The lock deliberately holds no environment facts. `pg.version` stays in
+`dalforge.yaml`.
 
 ## 3. Layering
 
@@ -124,8 +187,8 @@ This is a feasibility check only; the DynamoDB backend isn't built.
 | lifecycle states | columns + migrations | attributes; no DDL, and GSI changes belong to IaC |
 | transactions | `WithTx` on `pgx.Tx` | `TransactWriteItems`; a different model, not in the core interface |
 
-The core model maps cleanly. The same ESR rule (range on the leading sort
-column) holds in both backends. The DynamoDB-specific limits (single sort
+The core model maps cleanly. The same ESR (Equality, Sort, Range; see §5)
+rule holds in both backends: the range goes on the leading sort column. The DynamoDB-specific limits (single sort
 attribute, no non-key uniqueness, no strongly consistent GSI reads) would be
 enforced as that backend's own lint rules, DAL4xx.
 
@@ -234,20 +297,157 @@ comes from the core layer and is the same for every backend.
 by name, which is readable and survives renumbering. There's no `CHECK`
 constraint, because adding a value would then need a migration before the code
 could use it. `custom_type` leaves room for extension types such as
-`vector(1536)` or PostGIS types, without first-class support in v1.
+`vector(1536)` or PostGIS types, without first-class support in v1. A
+`custom_type` column must also set `go_type` (e.g.
+`github.com/pgvector/pgvector-go.Vector`), which becomes a sqlc type override
+and the domain field's type.
+
+### Postgres version, extensions and type evolution
+
+**Two declarations, two owners:**
+
+| Where | What | Example | Default |
+|---|---|---|---|
+| IDL: `(dal.pg.v1.file)` | what the schema **needs**: a portable requirement | `{min_version: 16 extensions: ["vector"]}` | dalforge's floor (16), no extensions |
+| `dalforge.yaml`: `pg.version` | what you **deploy to**: an environment fact | `pg: {version: "16.9"}` | 16 |
+
+Lint checks every type and feature in use against both:
+
+- `DAL207`: the target is older than `min_version`, or something in use needs
+  a newer version.
+- `DAL208`: a `custom_type` comes from an extension that isn't declared, or a
+  `custom_type` has no `go_type`.
+
+The deploy target also drives the local `compose.yaml` image tag and the
+integration test's version check, instead of hard-coding them.
+
+**How supported types evolve when more versions are supported:**
+
+1. **The bundled `Type` enum is append-only.** It's the union of first-class
+   types across every supported version. Values are never renumbered or
+   removed. A breaking change would ship as `dal.pg.v2` next to v1.
+2. **Version support is data in the generator, not the proto.** A capability
+   table (`internal/backend/pg`) maps each type and feature to the version it
+   first appeared in, and to the extension that provides it if any. Examples:
+   - multirange types: 14
+   - `NULLS NOT DISTINCT`: 15
+   - `MERGE … RETURNING`, `JSON_TABLE`: 17
+   - built-in `uuidv7()`, virtual generated columns: 18
+   - `vector`: provided by the `vector` extension
+
+   Adding version N means adding table rows and enum values. Existing IDL is
+   untouched.
+3. **The bundled options match the binary.** The options protos are embedded
+   in `dalforge`, so the set of usable types is exactly what that release
+   knows. Using a newer value with an older binary fails at compile time with
+   an unknown enum name, never silently. Additive option changes ship in
+   minor releases.
+4. **"First-class" means the generator knows the whole pipeline for the
+   type:** Go type, pgx codec, sqlc override, keyset encoding and comparison
+   semantics. Everything else uses `custom_type` + `go_type`, and a type is
+   promoted into the enum once it has proven itself.
+5. **Extension types are checked against declared extensions**, not the PG
+   version. Their availability depends on the extension version Aurora ships
+   for that engine version.
+6. **Dropping an old version** (e.g. when 16 reaches end of life) only raises
+   dalforge's floor. No enum values are removed.
+   Per-version option sets (`dal.pg16.v1`, `dal.pg17.v1`, …) were considered
+   and rejected. They'd make version upgrades an IDL rewrite and duplicate
+   every option, while the capability table already answers "valid on version
+   N?" in one place.
+7. **Testing a version range:** supporting more than one major version means
+   running the integration suite as a matrix, with one compose image per
+   supported version.
 
 ## 5. Access paths and index derivation
 
 Physical structures are **query-first**: they are derived from the access
 patterns that need them, not declared up front. A List resolves to an access
-path of three parts:
+path of three parts, which give the composite index its column order. This is
+the **ESR rule (Equality, Sort, Range)**, a common heuristic for composite
+indexes (MongoDB's indexing guidance calls it that):
 
-- **E**quality filters (`eq`)
-- **S**ort (`order_by`)
-- **R**ange (`range`, which must be the leading sort column)
+- **E**quality filters (`eq`) come first. They pin exact values, so the index
+  narrows to one contiguous slice.
+- **S**ort (`order_by`) comes next. Within that slice the index is already in
+  order, so no separate sort step is needed.
+- **R**ange (`range`) comes last. A B-tree scans only one contiguous range, so
+  no column after a range can be used efficiently. In DALForge the range must
+  also be the leading sort column, so Sort and Range share one column.
 
 The primary key is appended as a tie-breaker. That makes the order total,
 which keyset pagination requires.
+
+### One shape per rpc
+
+Every rpc is a single, fixed access path. Every `eq` column is a required
+parameter, and the generated SQL never uses catch-all predicates such as
+`(@x IS NULL OR col = @x)`. Those predicates let one query serve many filter
+combinations, and in doing so they defeat the index and destabilise generic
+plans.
+
+The consequence is deliberate: **a different filter combination is a
+different rpc, with its own index.** The shape is explicit at the call site,
+and the index cost of each new shape is visible in the IDL and in lint
+(`DAL201`).
+
+### Range filters
+
+`range` names one column:
+
+- **Bounds:** it becomes a half-open interval with **both bounds required**:
+  `col >= @<col>_from AND col < @<col>_to`. Required bounds keep a single plan
+  shape, so prepared and generic plans always use the index. An open-ended
+  range is either a separate rpc or a caller-supplied sentinel bound.
+- **Sort:** a range implies sorting by that column (`ASC` unless `order_by`
+  says `DESC`). If `order_by` is given, its leading column must be the range
+  column (`DAL101`).
+- **How many:** only one range per rpc. The proto shape enforces this, since
+  `range` is a single string.
+
+A B-tree can serve exactly one range after an equality prefix. That's why the
+rules are: equality columns first and strict, then at most one range or sort
+column, then the primary key.
+
+### Nullable sort columns
+
+Keyset row comparisons treat NULL as unknown, so rows with a NULL sort value
+would be silently skipped. A nullable (`optional`) column may appear in
+`order_by` only when it's also the `range` column, because the range predicate
+already excludes NULLs. Otherwise it's error `DAL115`. In that case Postgres
+also adds `col IS NOT NULL` to the derived partial index predicate.
+
+### Worked example: the ESR ladder
+
+`Order` has `state`, an `account_id`, and an optional `fulfilled_at`. Each
+filter combination is its own rpc, and each derives the narrowest index that
+serves it:
+
+| rpc | eq | range | sort | derived Postgres index |
+|---|---|---|---|---|
+| `ListOrdersByState` | `state` | — | `id` (PK fallback) | `(state, id)` |
+| `ListOrdersByStateAndFulfilledAt` | `state` | `fulfilled_at` | `fulfilled_at, id` | `(state, fulfilled_at, id) WHERE fulfilled_at IS NOT NULL` |
+| `ListOrdersByAccountAndStateAndFulfilledAt` | `account_id, state` | `fulfilled_at` | `fulfilled_at, id` | `(account_id, state, fulfilled_at, id) WHERE fulfilled_at IS NOT NULL` |
+
+(All three indexes also carry `deleted_at IS NULL` when the entity has soft
+delete.)
+
+**How the ladder works:**
+- **Equality is strict:** equality columns form the index prefix.
+- **One range, last:** the single range column comes after them.
+- **Each rung adds a column:** a step up the ladder adds an equality column in
+  front of the existing range. It never adds a second range.
+
+**Why the first two rungs don't share an index:** `ListOrdersByState` sorts by
+`id` and the second rpc sorts by `fulfilled_at`, so their indexes differ after
+`state`. If `ListOrdersByState` declared `order_by: ["fulfilled_at"]`, the two
+rpcs would share one index. Lint `DAL206` points out cases like this. Note
+that the partial predicate would then exclude unfulfilled orders, which is
+exactly the kind of trade-off the hint makes visible.
+
+**Naming:** the expected name is
+`List<Entities>By<Eq1>And<Eq2>…And<Range>`. A different name gets warning
+`DAL114`, with the suggested name.
 
 For Postgres, an access path becomes the B-tree index `(eq..., sort..., pk...)`:
 
@@ -264,12 +464,13 @@ timestamp wins" rule. It resolves in this order:
 
 1. **Explicit `order_by` on the rpc.** It's used as written, and the physical
    structure is derived from it.
-2. **A backend-declared index.** If the rpc gives `eq` but no `order_by`, and
+2. **The `range` column**, ascending.
+3. **A backend-declared index.** If the rpc gives `eq` but no `order_by`, and
    an explicit index has leading columns exactly equal to the `eq` set (in any
    order), that index's remaining columns become the sort. For Postgres that's
    a `(dal.pg.v1.table).indexes` entry. Use this when several List rpcs share
    one index.
-3. **The primary key.** It's deterministic, and it produces lint `DAL103` if the
+4. **The primary key.** It's deterministic, and it produces lint `DAL103` if the
    key isn't time-ordered, e.g. a random UUIDv4 rather than UUIDv7 or a
    sequence. The results are stable but meaningless to users.
 
@@ -281,9 +482,11 @@ otherwise it's lint error `DAL104`. A non-unique lookup is a List.
 
 ### Postgres index merging and budget
 
-- **Prefix merging:** derived indexes are deduplicated when one is a prefix of
-  another with compatible directions. For example, `(account_id)` is served by
-  `(account_id, created_at DESC, id DESC)`.
+- **Prefix merging:** derived indexes are deduplicated when one index's full
+  column list, sort included, is a prefix of another's with compatible
+  directions. A pure-equality need such as `get.by` on `account_id`, or an
+  existence check, is served by `(account_id, created_at DESC, id DESC)`. A
+  List on `account_id` sorted by `id` is not: it needs `(account_id, id)`.
 - **Equality order:** equality columns are reordered to maximise sharing, since
   their order inside the equality prefix doesn't affect correctness.
 - **Budget:** each table has an index budget (project default 5, overridable
@@ -304,6 +507,9 @@ Core (every backend):
 | DAL109 | warn | an `order_by` column can be changed by an `update`/`upsert`, so rows can move between pages mid-iteration |
 | DAL110 | error | `shard_key` names a missing or deprecated column |
 | DAL111–113 | error | field-number identity violations; see §8 |
+| DAL114 | warn | rpc name doesn't match its shape (`List<Entities>By<Eq…>And<Range>`); suggests the expected name |
+| DAL115 | error | a nullable column is in `order_by` without also being the `range` column |
+| DAL116 | error | a vendored copy of the options protos differs from the hashes in `dalforge.lock` |
 
 Postgres:
 
@@ -314,6 +520,9 @@ Postgres:
 | DAL203 | warn | mixed sort directions; the keyset predicate can't use a row comparison |
 | DAL204 | error | table or column name is a SQL reserved word; set `name` |
 | DAL205 | error | name collision between a generated query and a custom sqlc query |
+| DAL206 | info | two List rpcs share an equality prefix but sort differently; aligning `order_by` would let them share one index |
+| DAL207 | error | the deploy target (`dalforge.yaml` `pg.version`) is older than `min_version`, or a type/feature in use needs a newer version |
+| DAL208 | error | a `custom_type` comes from an undeclared extension, or has no `go_type` |
 | DAL3xx | error | migration safety; see §8 |
 
 DAL4xx is reserved for a future DynamoDB backend.
@@ -651,8 +860,9 @@ because Atlas has no notion of a field's release history.
 What a consuming repo looks like (paths are configurable in `dalforge.yaml`):
 
 ```
-dalforge.yaml               # proto roots, backend, output dirs, index budget, page-size defaults
+dalforge.yaml               # proto roots, backend, pg.version (deploy target), output dirs, index budget, page-size defaults
 proto/orders/v1/orders.proto
+dalforge.lock               # committed; toolchain pin (dalforge version, options hashes, sqlc)
 dalforge.snapshot.json      # committed; source of truth for migration diffs
 migrations/                 # generated golang-migrate files, append-only, reviewed
 schema/schema.sql           # generated desired state (also the sqlc schema input)
@@ -739,7 +949,34 @@ check:all` adds the integration suite, and it's what CI runs.
 
 `examples/orders/` is a standalone Go module that consumes DALForge the way a
 user would: IDL, `dalforge.yaml`, custom queries, and checked-in generated
-output.
+output. It models two entities, **`Account`** and **`Order`**
+(`Order.account_id` refers to `Account.id`), to cover two things.
+
+**The ESR ladder from §5:** `ListOrdersByState`,
+`ListOrdersByStateAndFulfilledAt` and
+`ListOrdersByAccountAndStateAndFulfilledAt`. The README shows each rpc next to
+the index it derives, why the first two don't share an index, and the `DAL206`
+hint that would let them.
+
+**Application-level referential integrity, without an FK:**
+
+- **Why it matters:** without an FK, inserting an order for a missing account
+  *succeeds*. The orphan only shows up later, as an empty lookup far from the
+  cause. sqlc type-checks queries but doesn't enforce integrity; only the
+  database (an FK) or the application can.
+- **Create:** the service's `CreateOrder` runs in `WithTx`. It first runs a
+  custom sqlc query `SELECT 1 FROM accounts WHERE id = $1 FOR KEY SHARE`,
+  which fails fast if the account is missing and blocks a concurrent account
+  delete until commit (the race that hand-written checks usually miss). Then
+  it calls the generated `Create`.
+- **Delete:** `DeleteAccount` checks `EXISTS (SELECT 1 FROM orders WHERE
+  account_id = $1)` in the same transaction before the generated `Delete`. The
+  ladder's `(account_id, …)` index serves that check.
+- **Sharding:** if accounts and orders live on different shards, this can't
+  be atomic. The README says so and points to async reconciliation as the
+  usual answer.
+- **Double duty:** these custom queries also demonstrate the sqlc escape hatch
+  next to the generated repositories.
 
 Its README is the entry point for newcomers. It walks through:
 
@@ -788,8 +1025,14 @@ phase 1, List and lint in phase 2, and a migration walkthrough in phase 3.
 | Batch operations | Out of scope |
 | Backend layering | Core IDL/IR/interfaces are backend-neutral; Postgres is the reference backend; DynamoDB mapping validated on paper only |
 | Platform | Aurora PostgreSQL 16.x, pgx v5, Go 1.26+ |
-| Options Go bindings | protoc-gen-go driven by protoc, both pinned via mise; no buf. Field-number safety comes from DALForge's own snapshot rules (DAL111–113) |
+| Options Go bindings | protoc (pinned in mise) + protoc-gen-go (a `go tool` dependency, so it always matches the protobuf runtime); no buf. Checked in next to the protos; `mise run proto:check` (part of `check`) fails on stale output; unit tests pin extension numbers and import paths. Field-number safety of user IDL comes from the snapshot rules (DAL111–113) |
 | Testing | Unit + golden in `mise run check`; `integration` build tag against a docker compose `postgres:16.9` in `mise run test:integration`; `check:all` for CI |
+| List shapes | One fixed shape per rpc: required equality params, at most one range (half-open, both bounds required) as the last column; each filter combination is its own rpc and index (ESR ladder); naming lint DAL114 (warn); nullable sort columns only as the range column (DAL115) |
+| Referential integrity | Not generated. Demonstrated in `examples/orders` (Account ↔ Order) as an application pattern: `WithTx` + `FOR KEY SHARE` + custom sqlc queries. Generated opt-in checks are a possible later addition |
+| PG version & types | The IDL declares requirements (`(dal.pg.v1.file)`: `min_version`, `extensions`); `dalforge.yaml` declares the deploy target (`pg.version`). The `Type` enum is append-only. Per-version and per-extension availability lives in a generator capability table, checked by DAL207/DAL208. `custom_type` requires `go_type` |
+| Distribution | Consumers install dalforge with mise's `go:` backend (version in their `mise.toml`). The binary stays CGO-free, and its version comes from build info |
+| sqlc pinning | A prebuilt binary through mise in the consuming repo, checked against `dalforge.lock`; replaces `go tool sqlc` (cgo) |
+| Toolchain pinning | `dalforge.lock` (TOML: dalforge version, options hashes, sqlc version), committed. Mismatches fail until `dalforge lock -upgrade`. Separate from the schema snapshot. Per-PG-version option sets were rejected |
 | Container runtime | Colima via mise (dedicated `dalforge` profile, repo-scoped `DOCKER_HOST`); native Docker in CI. Chosen over embedded Postgres so that future backends and fault-injection proxies share one mechanism |
 | Retries | SQLSTATE classification into Retryable / RetryableIfIdempotent / NotRetryable, plus per-op idempotency; pluggable `dal.Retrier` (closure-friendly) and classifier; built-in default; failsafe-go adapter shown in examples |
 | Onboarding | `examples/orders` standalone consumer module with a README walkthrough, kept fresh by `mise run examples` |

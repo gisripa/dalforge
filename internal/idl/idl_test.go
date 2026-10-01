@@ -35,6 +35,7 @@ func TestOptionsCompile(t *testing.T) {
 		{name: "field", opts: fd.Messages().ByName("Order").Fields().ByName("id").Options(), ext: "dal.v1.field"},
 		{name: "store", opts: fd.Services().ByName("OrderStore").Options(), ext: "dal.v1.store"},
 		{name: "query", opts: fd.Services().ByName("OrderStore").Methods().ByName("ListByAccount").Options(), ext: "dal.v1.query"},
+		{name: "pg file", opts: fd.Options(), ext: "dal.pg.v1.file"},
 		{name: "pg table", opts: fd.Messages().ByName("Order").Options(), ext: "dal.pg.v1.table"},
 		{name: "pg column", opts: fd.Messages().ByName("Order").Fields().ByName("status").Options(), ext: "dal.pg.v1.column"},
 	}

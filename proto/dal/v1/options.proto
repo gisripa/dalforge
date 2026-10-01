@@ -17,7 +17,7 @@ package dal.v1;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/gisripa/dalforge/gen/dal/v1;dalv1";
+option go_package = "github.com/gisripa/dalforge/proto/dal/v1;dalv1";
 
 // Extension numbers are taken from the 50000-99999 range reserved for
 // in-house use. They must never change once published. Backend packages use

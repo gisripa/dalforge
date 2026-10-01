@@ -2,6 +2,11 @@
 // entity and its access patterns are declared with dal.v1 and stay
 // backend-neutral. Every option here is optional.
 //
+// Evolution: this file is bundled in the dalforge binary and only grows.
+// Type values are never renumbered or removed. Which Postgres version (or
+// extension) a type or feature needs is data in the generator, not here, and
+// is linted against the deploy target in dalforge.yaml.
+//
 // See docs/design.md for the type mapping and index derivation.
 syntax = "proto3";
 
@@ -9,7 +14,11 @@ package dal.pg.v1;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/gisripa/dalforge/gen/dal/pg/v1;pgv1";
+option go_package = "github.com/gisripa/dalforge/proto/dal/pg/v1;pgv1";
+
+extend google.protobuf.FileOptions {
+  File file = 51010;
+}
 
 extend google.protobuf.MessageOptions {
   Table table = 51010;
@@ -17,6 +26,19 @@ extend google.protobuf.MessageOptions {
 
 extend google.protobuf.FieldOptions {
   Column column = 51010;
+}
+
+// File states what the schema in a file needs from Postgres. The deploy
+// target itself (e.g. 16.9) lives in dalforge.yaml; lint fails when the target
+// is older than min_version or lacks a declared extension.
+message File {
+  // Minimum Postgres major version, e.g. 16. Zero means dalforge's floor.
+  uint32 min_version = 1;
+
+  // Extensions the schema needs, e.g. ["vector"]. Each one is emitted as
+  // CREATE EXTENSION IF NOT EXISTS, and every custom_type it provides must be
+  // covered by one of them.
+  repeated string extensions = 2;
 }
 
 // Table refines the Postgres table.
@@ -62,9 +84,17 @@ message Column {
 
   // Column default as a SQL expression, e.g. "now()" or "'pending'".
   string default = 3;
+
+  // Go type for a custom_type column, as "import/path.Type", e.g.
+  // "github.com/pgvector/pgvector-go.Vector". It's passed to sqlc as a type
+  // override and used in the domain struct. Required with custom_type.
+  string go_type = 4;
 }
 
-// Type lists Postgres types with first-class support.
+// Type lists Postgres types with first-class support: the generator knows
+// their Go type, pgx codec, sqlc override and keyset encoding. Values are only
+// ever added. A value whose type needs a newer Postgres than the floor notes
+// it, e.g. "// PG 17+". All values below exist in every supported version.
 enum Type {
   TYPE_UNSPECIFIED = 0;
   TYPE_TEXT = 1;

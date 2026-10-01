@@ -29,6 +29,7 @@ mise run test
 mise run lint
 mise run fmt
 mise run build                    # -> ./bin/dalforge
+mise run proto                    # regenerate options Go bindings after editing proto/
 mise run check                    # lint + unit tests + build (no Docker)
 mise run db:up                    # start the Colima VM + local postgres:16.9 (docker compose)
 mise run vm:down                  # stop the VM when done (frees ~2 GB RAM)
@@ -45,7 +46,8 @@ internal/idl/       IDL loading (currently a smoke test for the options proto)
 internal/pgtest/    per-test Postgres databases for integration tests
 internal/integration/ end-to-end tests (build tag `integration`)
 compose.yaml        local postgres:16.9 for integration tests and examples
-proto/dal/v1/       dal.v1 backend-neutral options (draft)
-proto/dal/pg/v1/    dal.pg.v1 Postgres options (draft)
+proto/dal/v1/       dal.v1 backend-neutral options (draft) + Go bindings (dalv1)
+proto/dal/pg/v1/    dal.pg.v1 Postgres options (draft) + Go bindings (pgv1)
+scripts/            protogen.sh (used by `mise run proto`)
 docs/design.md      design doc
 ```
