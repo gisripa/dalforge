@@ -1,0 +1,90 @@
+{
+  "schema": {
+    "entities": [
+      {
+        "full_name": "shop.v1.Account",
+        "table": "accounts",
+        "table_source": "declared",
+        "fields": [
+          {
+            "column": "id",
+            "number": 1,
+            "kind": "string",
+            "format": "uuid",
+            "primary_key": true,
+            "state": "active",
+            "pos": {
+              "file": "shop/v1/account.proto",
+              "line": 11,
+              "col": 3
+            }
+          },
+          {
+            "column": "name",
+            "number": 2,
+            "kind": "string",
+            "state": "active",
+            "pos": {
+              "file": "shop/v1/account.proto",
+              "line": 15,
+              "col": 3
+            }
+          }
+        ],
+        "reserved": {},
+        "pos": {
+          "file": "shop/v1/account.proto",
+          "line": 8,
+          "col": 1
+        }
+      }
+    ],
+    "stores": [
+      {
+        "full_name": "shop.v1.AccountStore",
+        "entity": "shop.v1.Account",
+        "queries": [
+          {
+            "method": "GetAccount",
+            "request": {
+              "full_name": "shop.v1.AccountKey",
+              "fields": [
+                {
+                  "name": "id",
+                  "number": 1,
+                  "kind": "string"
+                }
+              ]
+            },
+            "response": {
+              "full_name": "shop.v1.Account",
+              "entity": true
+            },
+            "pos": {
+              "file": "shop/v1/stores.proto",
+              "line": 12,
+              "col": 3
+            },
+            "spec": {
+              "get": {
+                "by": {
+                  "names": [
+                    "id"
+                  ],
+                  "source": "defaulted"
+                },
+                "consistency": "eventual"
+              }
+            }
+          }
+        ],
+        "pos": {
+          "file": "shop/v1/stores.proto",
+          "line": 9,
+          "col": 1
+        }
+      }
+    ]
+  },
+  "pg": {}
+}

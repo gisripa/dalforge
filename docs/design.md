@@ -105,7 +105,58 @@ backend is built for now (§3).
   standard library, pgx, uuid, the sqlc output and the `dal` runtime, never
   `google.golang.org/protobuf`. A `go list -deps` test enforces this.
 
-### Reproducible generation: `dalforge.lock`
+### The IR
+
+`internal/idl.Load` compiles the IDL and builds the IR. It's the only stage
+that touches protobuf. Everything after it reads only:
+
+- **`internal/ir`, the core:** `Schema` → `Entity` (table, fields, shard key,
+  reserved numbers and names) and `Store` → `Query`. A query's `Spec` is
+  sealed: `Get | List | Create | Update | Delete | Upsert`.
+- **`internal/ir/pgir`, Postgres hints:** file `min_version`/`extensions`,
+  explicit indexes, the index budget, and per-column type, default and Go
+  type. They're keyed by entity full name and field number, so the core
+  never references backend types. A DynamoDB backend would add `ddbir` the
+  same way.
+
+**Rules:**
+- **Defaults are applied in the loader and marked.** Core defaults are filled
+  in, and each defaulted value carries a `Source` (`declared`, `defaulted`,
+  `inherited`) so lint can tell an explicit choice from a fallback:
+
+  | Value | Default |
+  |---|---|
+  | table name | snake_case of the message name |
+  | `Get.By`, `Upsert.ConflictOn` | the primary key |
+  | `List.OrderBy` | the range column, otherwise the primary key minus the `eq` columns (the PK fallback is `defaulted` with an empty `range`) |
+  | `Update.Columns`, `Upsert.Columns` | active columns that are neither key columns nor role columns |
+
+  Defaults that need backend knowledge (a sort inherited from an explicit pg
+  index) or config (page sizes) are filled in by later passes.
+- **References are names.** Column references (`eq`, `order_by`, `by`,
+  `shard_key`, …) are strings, resolved with `Entity.Column`. Validation
+  (1.4) guarantees they resolve before any emitter runs, so a typo becomes a
+  positioned lint error, not a load failure.
+- **Errors are structural and reported together.** The loader rejects:
+  - non-proto3 files
+  - an entity without a primary key
+  - `oneof` fields in entities
+  - unsupported well-known types (only `Timestamp`, `Struct`, `Value` and
+    `ListValue` are accepted)
+  - a store without an entity, or naming one that doesn't resolve
+  - an rpc without a query, or with an empty one
+  - an invalid sort
+  - streaming rpcs
+
+  Every error is reported in one run, each with `file:line:col`.
+- **Nullability** comes from the proto3 `optional` keyword
+  (`HasOptionalKeyword`), not field presence, which is always true for message
+  fields.
+- **Entities** are messages with `(dal.v1.table)` plus any message a store
+  names, which may live in an imported file.
+- **Golden IR fixtures** live in `internal/idl/testdata/load/*.json.golden`.
+
+
 
 Two checked-in files hold state, each with one job:
 
@@ -625,6 +676,56 @@ The core layer generates one package per proto package. It holds plain domain
 structs and backend-neutral repository interfaces. Each backend generates an
 implementation package next to it (`orderspg` today). Proto messages are never
 used at runtime.
+
+### From IDL to running code
+
+The IR (§2) is the generator's internal model. It never ships. `dalforge
+generate` reads it and writes two kinds of output, and sqlc fills in the
+middle layer:
+
+```
+                 dalforge generate (reads IR)
+                 │
+     ┌───────────┴────────────────────────────┐
+     ▼                                        ▼
+SQL side (fed to sqlc)                 Go side (dalforge's own)
+  schema/schema.sql                      gen/orders/v1/orders/     domain structs + interfaces
+  queries/generated/*.sql                gen/orders/v1/orderspg/   repository implementation
+  sqlc.yaml
+     │
+     ▼ sqlc generate
+  gen/sqlcdb/   Queries struct, ListOrdersByAccount(...), row structs (pgtype)
+```
+
+At runtime, a call goes down these layers:
+
+```
+your service
+  → orders.OrderReadRepository.ListByAccount(ctx, params)   // dalforge interface, plain Go types
+  → orderspg.Repository                                     // dalforge implementation:
+        picks reader/writer pool, wraps the call in the retrier,
+        decodes the page token, maps domain ↔ sqlc row types,
+        fetches page_size+1 rows, builds next_page_token
+  → sqlcdb.Queries.ListOrdersByAccount(ctx, args)           // sqlc-generated, the typed SQL call
+  → pgx v5 pool → Postgres
+```
+
+**Why two Go layers sit on top of sqlc:**
+- **sqlc's types are SQL-shaped:** `pgtype.UUID`, `pgtype.Timestamptz`, one
+  function per query. The dalforge layer gives services domain-shaped types
+  (`uuid.UUID`, `time.Time`, `*string`) and adds what sqlc doesn't have: pool
+  routing, retries, page tokens, and error mapping to `dal.ErrNotFound` and
+  friends.
+- **Services depend only on the interfaces** in the domain package. Only the
+  composition root knows about `orderspg`, which keeps other backends
+  possible.
+- **Handwritten queries** in `queries/custom/` go through the same sqlc config
+  and land on the same `sqlcdb.Queries`. They're the escape hatch, usable
+  alongside the repositories and inside `WithTx`.
+
+The generated packages import the standard library, pgx, uuid, the sqlc
+output and the `dal`/`dalpg` runtime. Never the IR, protobuf or the generator
+(enforced by step 1.12's `go list -deps` guard).
 
 ```go
 // package orders: core, backend-neutral

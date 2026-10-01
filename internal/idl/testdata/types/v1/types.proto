@@ -1,0 +1,86 @@
+// Type coverage: every supported proto type, the column/format/role options,
+// reserved ranges and Postgres hints. The table name defaults to snake_case.
+syntax = "proto3";
+
+package types.v1;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option (dal.pg.v1.file) = {
+  min_version: 16
+  extensions: ["vector"]
+};
+
+enum Color {
+  COLOR_UNSPECIFIED = 0;
+  COLOR_RED = 1;
+  COLOR_BLUE = 2;
+}
+
+message HTTPRequestLog {
+  option (dal.v1.table) = {};
+  option (dal.pg.v1.table) = {
+    index_budget: 3
+    indexes: [
+      {
+        name: "logs_by_path"
+        columns: ["path", "created_at DESC"]
+        include: ["status"]
+        where: "status >= 500"
+      }
+    ]
+  };
+
+  reserved 40 to 42, 50;
+  reserved "legacy_path";
+
+  message Nested {
+    string key = 1;
+  }
+
+  int64 id = 1 [(dal.v1.field).primary_key = true];
+  bool ok = 2;
+  int32 i32 = 3;
+  sint32 s32 = 4;
+  sfixed32 sf32 = 5;
+  int64 i64 = 6;
+  sint64 s64 = 7;
+  sfixed64 sf64 = 8;
+  uint32 u32 = 9;
+  fixed32 f32 = 10;
+  uint64 u64 = 11;
+  fixed64 f64 = 12;
+  float fl = 13;
+  double db = 14;
+  string path = 15;
+  bytes body = 16;
+  Color color = 17;
+  google.protobuf.Timestamp created_at = 18;
+  optional google.protobuf.Timestamp finished_at = 19;
+  optional string note = 20;
+  repeated string tags = 21;
+  map<string, string> headers = 22;
+  google.protobuf.Struct meta = 23;
+  Nested nested = 24;
+  repeated Nested nested_list = 25;
+  int32 status = 26;
+  string request_id = 27 [(dal.v1.field) = {
+    name: "req_id"
+    format: FORMAT_UUID
+    unique: true
+  }];
+  string amount = 28 [
+    (dal.v1.field).format = FORMAT_DECIMAL,
+    (dal.pg.v1.column).type = TYPE_NUMERIC
+  ];
+  string payload = 29 [(dal.v1.field).format = FORMAT_JSON];
+  string embedding = 30 [(dal.pg.v1.column) = {
+    custom_type: "vector(3)"
+    go_type: "github.com/pgvector/pgvector-go.Vector"
+  }];
+  string old_status = 31 [(dal.v1.field).state = STATE_DEPRECATED];
+  double ratio = 32 [(dal.pg.v1.column).type = TYPE_DOUBLE_PRECISION];
+}

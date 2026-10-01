@@ -1,0 +1,315 @@
+{
+  "schema": {
+    "entities": [
+      {
+        "full_name": "orders.v1.Order",
+        "table": "orders",
+        "table_source": "declared",
+        "fields": [
+          {
+            "column": "id",
+            "number": 1,
+            "kind": "string",
+            "format": "uuid",
+            "primary_key": true,
+            "state": "active",
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 21,
+              "col": 3
+            }
+          },
+          {
+            "column": "account_id",
+            "number": 2,
+            "kind": "string",
+            "format": "uuid",
+            "state": "active",
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 25,
+              "col": 3
+            }
+          },
+          {
+            "column": "status",
+            "number": 3,
+            "kind": "string",
+            "state": "active",
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 26,
+              "col": 3
+            }
+          },
+          {
+            "column": "note",
+            "number": 4,
+            "kind": "string",
+            "nullable": true,
+            "state": "active",
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 27,
+              "col": 3
+            }
+          },
+          {
+            "column": "version",
+            "number": 5,
+            "kind": "int64",
+            "role": "version",
+            "state": "active",
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 28,
+              "col": 3
+            }
+          },
+          {
+            "column": "created_at",
+            "number": 6,
+            "kind": "timestamp",
+            "role": "create_time",
+            "state": "active",
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 29,
+              "col": 3
+            }
+          },
+          {
+            "column": "updated_at",
+            "number": 7,
+            "kind": "timestamp",
+            "role": "update_time",
+            "state": "active",
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 30,
+              "col": 3
+            }
+          },
+          {
+            "column": "deleted_at",
+            "number": 8,
+            "kind": "timestamp",
+            "nullable": true,
+            "role": "delete_time",
+            "state": "active",
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 31,
+              "col": 3
+            }
+          }
+        ],
+        "shard_key": [
+          "account_id"
+        ],
+        "reserved": {},
+        "pos": {
+          "file": "orders/v1/orders.proto",
+          "line": 12,
+          "col": 1
+        }
+      }
+    ],
+    "stores": [
+      {
+        "full_name": "orders.v1.OrderStore",
+        "entity": "orders.v1.Order",
+        "queries": [
+          {
+            "method": "GetById",
+            "request": {
+              "full_name": "orders.v1.GetByIdRequest",
+              "fields": [
+                {
+                  "name": "id",
+                  "number": 1,
+                  "kind": "string"
+                }
+              ]
+            },
+            "response": {
+              "full_name": "orders.v1.Order",
+              "entity": true
+            },
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 37,
+              "col": 3
+            },
+            "spec": {
+              "get": {
+                "by": {
+                  "names": [
+                    "id"
+                  ],
+                  "source": "defaulted"
+                },
+                "consistency": "eventual"
+              }
+            }
+          },
+          {
+            "method": "ListByAccount",
+            "request": {
+              "full_name": "orders.v1.ListByAccountRequest",
+              "fields": [
+                {
+                  "name": "account_id",
+                  "number": 1,
+                  "kind": "string"
+                },
+                {
+                  "name": "page_size",
+                  "number": 2,
+                  "kind": "int32"
+                },
+                {
+                  "name": "page_token",
+                  "number": 3,
+                  "kind": "string"
+                }
+              ]
+            },
+            "response": {
+              "full_name": "orders.v1.ListOrdersResponse",
+              "fields": [
+                {
+                  "name": "orders",
+                  "number": 1,
+                  "kind": "message",
+                  "repeated": true,
+                  "message": "orders.v1.Order"
+                },
+                {
+                  "name": "next_page_token",
+                  "number": 2,
+                  "kind": "string"
+                }
+              ]
+            },
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 44,
+              "col": 3
+            },
+            "spec": {
+              "list": {
+                "eq": [
+                  "account_id"
+                ],
+                "order_by": {
+                  "columns": [
+                    {
+                      "column": "created_at",
+                      "desc": true
+                    }
+                  ],
+                  "source": "declared"
+                },
+                "consistency": "eventual"
+              }
+            }
+          },
+          {
+            "method": "Create",
+            "request": {
+              "full_name": "orders.v1.Order",
+              "entity": true
+            },
+            "response": {
+              "full_name": "orders.v1.Order",
+              "entity": true
+            },
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 53,
+              "col": 3
+            },
+            "spec": {
+              "create": {}
+            }
+          },
+          {
+            "method": "UpdateStatus",
+            "request": {
+              "full_name": "orders.v1.Order",
+              "entity": true
+            },
+            "response": {
+              "full_name": "orders.v1.Order",
+              "entity": true
+            },
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 59,
+              "col": 3
+            },
+            "spec": {
+              "update": {
+                "columns": {
+                  "names": [
+                    "status",
+                    "note"
+                  ],
+                  "source": "declared"
+                }
+              }
+            }
+          },
+          {
+            "method": "Delete",
+            "request": {
+              "full_name": "orders.v1.GetByIdRequest",
+              "fields": [
+                {
+                  "name": "id",
+                  "number": 1,
+                  "kind": "string"
+                }
+              ]
+            },
+            "response": {
+              "full_name": "orders.v1.Order",
+              "entity": true
+            },
+            "pos": {
+              "file": "orders/v1/orders.proto",
+              "line": 67,
+              "col": 3
+            },
+            "spec": {
+              "delete": {}
+            }
+          }
+        ],
+        "pos": {
+          "file": "orders/v1/orders.proto",
+          "line": 34,
+          "col": 1
+        }
+      }
+    ]
+  },
+  "pg": {
+    "files": {
+      "orders/v1/orders.proto": {
+        "min_version": 16
+      }
+    },
+    "tables": {
+      "orders.v1.Order": {
+        "index_budget": 4,
+        "columns": {
+          "3": {
+            "default": "'pending'"
+          }
+        }
+      }
+    }
+  }
+}

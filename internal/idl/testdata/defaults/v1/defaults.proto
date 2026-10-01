@@ -1,0 +1,128 @@
+// Defaults the loader fills in, each marked with its Source. Item has no
+// (dal.v1.table) option: it becomes an entity because ItemStore names it.
+syntax = "proto3";
+
+package defaults.v1;
+
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Item {
+  string tenant_id = 1 [(dal.v1.field) = {
+    format: FORMAT_UUID
+    primary_key: true
+  }];
+  string id = 2 [(dal.v1.field) = {
+    format: FORMAT_UUID
+    primary_key: true
+  }];
+  string sku = 3 [(dal.v1.field).unique = true];
+  string name = 4;
+  optional string color = 5;
+  string legacy_code = 6 [(dal.v1.field).state = STATE_DEPRECATED];
+  int64 version = 7 [(dal.v1.field).role = ROLE_VERSION];
+  google.protobuf.Timestamp created_at = 8 [(dal.v1.field).role = ROLE_CREATE_TIME];
+  google.protobuf.Timestamp updated_at = 9 [(dal.v1.field).role = ROLE_UPDATE_TIME];
+  optional google.protobuf.Timestamp deleted_at = 10 [(dal.v1.field).role = ROLE_DELETE_TIME];
+}
+
+service ItemStore {
+  option (dal.v1.store) = {entity: "Item"};
+
+  rpc GetItem(ItemKey) returns (Item) {
+    option (dal.v1.query) = {
+      get: {}
+    };
+  }
+  rpc GetItemBySku(SkuRequest) returns (Item) {
+    option (dal.v1.query) = {
+      get: {
+        by: ["sku"]
+        consistency: CONSISTENCY_STRONG
+      }
+    };
+  }
+  rpc ListItemsByTenant(TenantPage) returns (ItemPage) {
+    option (dal.v1.query) = {
+      list: {eq: ["tenant_id"]}
+    };
+  }
+  rpc ListItemsByTenantAndCreatedAt(TenantRangePage) returns (ItemPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["tenant_id"]
+        range: "created_at"
+        max_page_size: 100
+      }
+    };
+  }
+  rpc ListItemsByTenantNewest(TenantPage) returns (ItemPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["tenant_id"]
+        order_by: ["created_at desc", "id"]
+      }
+    };
+  }
+  rpc CreateItem(Item) returns (Item) {
+    option (dal.v1.query) = {
+      create: {}
+    };
+  }
+  rpc UpdateItem(Item) returns (Item) {
+    option (dal.v1.query) = {
+      update: {}
+    };
+  }
+  rpc UpsertItem(Item) returns (Item) {
+    option (dal.v1.query) = {
+      upsert: {}
+    };
+  }
+  rpc UpsertItemBySku(Item) returns (Item) {
+    option (dal.v1.query) = {
+      upsert: {
+        conflict_on: ["sku"]
+        columns: ["name"]
+      }
+    };
+  }
+  rpc DeleteItem(ItemKey) returns (Item) {
+    option (dal.v1.query) = {
+      delete: {}
+    };
+  }
+}
+
+// Not a store: ignored by dalforge.
+service Health {
+  rpc Ping(ItemKey) returns (ItemKey);
+}
+
+message ItemKey {
+  string tenant_id = 1;
+  string id = 2;
+}
+
+message SkuRequest {
+  string sku = 1;
+}
+
+message TenantPage {
+  string tenant_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message TenantRangePage {
+  string tenant_id = 1;
+  google.protobuf.Timestamp created_at_from = 2;
+  google.protobuf.Timestamp created_at_to = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ItemPage {
+  repeated Item items = 1;
+  string next_page_token = 2;
+}

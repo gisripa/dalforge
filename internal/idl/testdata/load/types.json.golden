@@ -1,0 +1,448 @@
+{
+  "schema": {
+    "entities": [
+      {
+        "full_name": "types.v1.HTTPRequestLog",
+        "table": "http_request_log",
+        "table_source": "defaulted",
+        "fields": [
+          {
+            "column": "id",
+            "number": 1,
+            "kind": "int64",
+            "primary_key": true,
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 44,
+              "col": 3
+            }
+          },
+          {
+            "column": "ok",
+            "number": 2,
+            "kind": "bool",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 45,
+              "col": 3
+            }
+          },
+          {
+            "column": "i32",
+            "number": 3,
+            "kind": "int32",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 46,
+              "col": 3
+            }
+          },
+          {
+            "column": "s32",
+            "number": 4,
+            "kind": "int32",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 47,
+              "col": 3
+            }
+          },
+          {
+            "column": "sf32",
+            "number": 5,
+            "kind": "int32",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 48,
+              "col": 3
+            }
+          },
+          {
+            "column": "i64",
+            "number": 6,
+            "kind": "int64",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 49,
+              "col": 3
+            }
+          },
+          {
+            "column": "s64",
+            "number": 7,
+            "kind": "int64",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 50,
+              "col": 3
+            }
+          },
+          {
+            "column": "sf64",
+            "number": 8,
+            "kind": "int64",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 51,
+              "col": 3
+            }
+          },
+          {
+            "column": "u32",
+            "number": 9,
+            "kind": "uint32",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 52,
+              "col": 3
+            }
+          },
+          {
+            "column": "f32",
+            "number": 10,
+            "kind": "uint32",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 53,
+              "col": 3
+            }
+          },
+          {
+            "column": "u64",
+            "number": 11,
+            "kind": "uint64",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 54,
+              "col": 3
+            }
+          },
+          {
+            "column": "f64",
+            "number": 12,
+            "kind": "uint64",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 55,
+              "col": 3
+            }
+          },
+          {
+            "column": "fl",
+            "number": 13,
+            "kind": "float",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 56,
+              "col": 3
+            }
+          },
+          {
+            "column": "db",
+            "number": 14,
+            "kind": "double",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 57,
+              "col": 3
+            }
+          },
+          {
+            "column": "path",
+            "number": 15,
+            "kind": "string",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 58,
+              "col": 3
+            }
+          },
+          {
+            "column": "body",
+            "number": 16,
+            "kind": "bytes",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 59,
+              "col": 3
+            }
+          },
+          {
+            "column": "color",
+            "number": 17,
+            "kind": "enum",
+            "enum": {
+              "full_name": "types.v1.Color",
+              "values": [
+                "COLOR_UNSPECIFIED",
+                "COLOR_RED",
+                "COLOR_BLUE"
+              ]
+            },
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 60,
+              "col": 3
+            }
+          },
+          {
+            "column": "created_at",
+            "number": 18,
+            "kind": "timestamp",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 61,
+              "col": 3
+            }
+          },
+          {
+            "column": "finished_at",
+            "number": 19,
+            "kind": "timestamp",
+            "nullable": true,
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 62,
+              "col": 3
+            }
+          },
+          {
+            "column": "note",
+            "number": 20,
+            "kind": "string",
+            "nullable": true,
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 63,
+              "col": 3
+            }
+          },
+          {
+            "column": "tags",
+            "number": 21,
+            "kind": "string",
+            "repeated": true,
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 64,
+              "col": 3
+            }
+          },
+          {
+            "column": "headers",
+            "number": 22,
+            "kind": "json",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 65,
+              "col": 3
+            }
+          },
+          {
+            "column": "meta",
+            "number": 23,
+            "kind": "json",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 66,
+              "col": 3
+            }
+          },
+          {
+            "column": "nested",
+            "number": 24,
+            "kind": "json",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 67,
+              "col": 3
+            }
+          },
+          {
+            "column": "nested_list",
+            "number": 25,
+            "kind": "json",
+            "repeated": true,
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 68,
+              "col": 3
+            }
+          },
+          {
+            "column": "status",
+            "number": 26,
+            "kind": "int32",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 69,
+              "col": 3
+            }
+          },
+          {
+            "column": "req_id",
+            "number": 27,
+            "kind": "string",
+            "format": "uuid",
+            "unique": true,
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 70,
+              "col": 3
+            }
+          },
+          {
+            "column": "amount",
+            "number": 28,
+            "kind": "string",
+            "format": "decimal",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 75,
+              "col": 3
+            }
+          },
+          {
+            "column": "payload",
+            "number": 29,
+            "kind": "string",
+            "format": "json",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 79,
+              "col": 3
+            }
+          },
+          {
+            "column": "embedding",
+            "number": 30,
+            "kind": "string",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 80,
+              "col": 3
+            }
+          },
+          {
+            "column": "old_status",
+            "number": 31,
+            "kind": "string",
+            "state": "deprecated",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 84,
+              "col": 3
+            }
+          },
+          {
+            "column": "ratio",
+            "number": 32,
+            "kind": "double",
+            "state": "active",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 85,
+              "col": 3
+            }
+          }
+        ],
+        "reserved": {
+          "numbers": [
+            [
+              40,
+              42
+            ],
+            [
+              50,
+              50
+            ]
+          ],
+          "names": [
+            "legacy_path"
+          ]
+        },
+        "pos": {
+          "file": "types/v1/types.proto",
+          "line": 23,
+          "col": 1
+        }
+      }
+    ],
+    "stores": null
+  },
+  "pg": {
+    "files": {
+      "types/v1/types.proto": {
+        "min_version": 16,
+        "extensions": [
+          "vector"
+        ]
+      }
+    },
+    "tables": {
+      "types.v1.HTTPRequestLog": {
+        "indexes": [
+          {
+            "name": "logs_by_path",
+            "columns": [
+              {
+                "column": "path"
+              },
+              {
+                "column": "created_at",
+                "desc": true
+              }
+            ],
+            "include": [
+              "status"
+            ],
+            "where": "status \u003e= 500"
+          }
+        ],
+        "index_budget": 3,
+        "columns": {
+          "28": {
+            "type": "numeric"
+          },
+          "30": {
+            "custom_type": "vector(3)",
+            "go_type": "github.com/pgvector/pgvector-go.Vector"
+          },
+          "32": {
+            "type": "double precision"
+          }
+        }
+      }
+    }
+  }
+}
