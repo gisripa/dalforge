@@ -1,0 +1,17 @@
+// DAL110: shard_key must name existing, active fields, once each.
+syntax = "proto3";
+
+package dal110;
+
+import "dal/v1/options.proto";
+
+message Order {
+  option (dal.v1.table) = {
+    shard_key: ["account_id", "tenant", "region_code", "account_id", "legacy_shard"]
+  };
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+  string account_id = 2;
+  string region = 3 [(dal.v1.field).name = "region_code"];
+  string legacy_shard = 4 [(dal.v1.field).state = STATE_DEPRECATED];
+}

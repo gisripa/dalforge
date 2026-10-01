@@ -1,0 +1,4 @@
+dal110.proto:8:1: error DAL110: shard_key: dal110.Order has no field "region_code" ("region_code" is the column of field "region"; references use field names)
+dal110.proto:8:1: error DAL110: shard_key: dal110.Order has no field "tenant"
+dal110.proto:8:1: error DAL110: shard_key: field "account_id" is listed more than once
+dal110.proto:8:1: error DAL110: shard_key: field "legacy_shard" is deprecated; deprecated fields are excluded from generated reads and writes

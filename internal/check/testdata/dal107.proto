@@ -1,0 +1,95 @@
+// DAL107: request/response shapes. The first two rpcs are valid controls.
+syntax = "proto3";
+
+package dal107;
+
+import "dal/v1/options.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_OPEN = 1;
+}
+
+message Order {
+  string id = 1 [(dal.v1.field).primary_key = true];
+  string account_id = 2;
+  Status status = 3;
+  google.protobuf.Timestamp fulfilled_at = 4;
+}
+
+service OrderStore {
+  option (dal.v1.store) = {entity: "Order"};
+
+  // Valid: an entity request for get, and Empty as a delete response.
+  rpc GetWhole(Order) returns (Order) {
+    option (dal.v1.query) = {get: {}};
+  }
+  rpc DeleteOrder(Key) returns (google.protobuf.Empty) {
+    option (dal.v1.query) = {delete: {}};
+  }
+
+  // Invalid from here on.
+  rpc GetById(WrongKey) returns (Order) {
+    option (dal.v1.query) = {get: {}};
+  }
+  rpc GetReturnsKey(Key) returns (Key) {
+    option (dal.v1.query) = {get: {}};
+  }
+  rpc ListByStatus(ListByStatusRequest) returns (Order) {
+    option (dal.v1.query) = {
+      list: {eq: ["status"]}
+    };
+  }
+  rpc ListByStatusAndFulfilledAt(RangeRequest) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["status"]
+        range: "fulfilled_at"
+      }
+    };
+  }
+  rpc ListByAccount(Order) returns (TwoLists) {
+    option (dal.v1.query) = {
+      list: {eq: ["account_id"]}
+    };
+  }
+  rpc CreateFromKey(Key) returns (Order) {
+    option (dal.v1.query) = {create: {}};
+  }
+  rpc DeleteReturnsKey(Key) returns (Key) {
+    option (dal.v1.query) = {delete: {}};
+  }
+}
+
+message Key {
+  string id = 1;
+}
+
+message WrongKey {
+  int64 id = 1;
+  string extra = 2;
+}
+
+message ListByStatusRequest {
+  string status = 1;
+  int32 page_size = 2;
+}
+
+message RangeRequest {
+  Status status = 1;
+  google.protobuf.Timestamp fulfilled_at_from = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message OrderPage {
+  repeated Order orders = 1;
+  string next_page_token = 2;
+}
+
+message TwoLists {
+  repeated Order a = 1;
+  repeated Order b = 2;
+}

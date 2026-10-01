@@ -1,0 +1,63 @@
+// DAL117: query references must name existing, active fields, once each.
+syntax = "proto3";
+
+package dal117;
+
+import "dal/v1/options.proto";
+
+message Order {
+  string id = 1 [(dal.v1.field).primary_key = true];
+  string account_id = 2;
+  string state = 3 [(dal.v1.field).name = "order_state"];
+  string legacy = 4 [(dal.v1.field).state = STATE_DEPRECATED];
+  string note = 5;
+}
+
+service OrderStore {
+  option (dal.v1.store) = {entity: "Order"};
+
+  rpc GetByMissing(NoFields) returns (Order) {
+    option (dal.v1.query) = {
+      get: {by: ["missing"]}
+    };
+  }
+  // Uses the column name instead of the field name.
+  rpc ListByColumnName(PageOnly) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {eq: ["order_state"]}
+    };
+  }
+  rpc ListBadRangeAndSort(PageOnly) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        range: "nope"
+        order_by: ["legacy DESC", "id", "id"]
+      }
+    };
+  }
+  rpc UpdateDeprecated(Order) returns (Order) {
+    option (dal.v1.query) = {
+      update: {columns: ["note", "legacy", "note"]}
+    };
+  }
+  rpc UpsertBadConflict(Order) returns (Order) {
+    option (dal.v1.query) = {
+      upsert: {
+        conflict_on: ["ghost"]
+        columns: ["note"]
+      }
+    };
+  }
+}
+
+message NoFields {}
+
+message PageOnly {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message OrderPage {
+  repeated Order orders = 1;
+  string next_page_token = 2;
+}

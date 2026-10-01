@@ -24,17 +24,23 @@ It generates:
 - sqlc query files for CRUD-by-key, keyset-paginated List, upsert and soft
   delete;
 - a `sqlc.yaml` with sqlc's safety features switched on;
-- typed Go domain structs and `ReadRepository` / `WriteRepository` /
-  `Repository` interfaces, with reads and writes routed to reader and writer
-  pools;
+- `ReadRepository` / `WriteRepository` / `Repository` interfaces per
+  entity, with reads and writes routed to reader and writer pools. Their entity
+  types are sqlc's model structs, re-exported as type aliases: no copy layer,
+  and no driver (pgx) types anywhere in the API;
+- basic footgun-free writes: version compare-and-swap on update, and upsert on
+  the primary key or a unique field;
 - versioned migrations, linted for n+1 rolling-deploy compatibility.
 
 Handwritten sqlc queries remain a first-class escape hatch alongside the
-generated ones.
+generated ones. They live in a user-owned directory (`queries/custom/`) that
+dalforge never touches; generated files say `DO NOT EDIT`.
 
-**The design is layered so a second backend (DynamoDB) can be added** without
-changing the IDL model or the domain-facing interfaces. Only the Postgres
-backend is built for now (§3).
+**The IDL, IR and lint are backend-neutral; generated code isn't.** The backend
+is chosen at declaration time (the IDL's backend options and `dalforge.yaml`),
+and the generated code is written for that backend. A second backend
+(DynamoDB) would reuse the IDL model and bring its own generated code. Only
+Postgres is built for now (§3).
 
 **Non-goals**
 - Complex queries (joins, aggregates, CTEs). Write those as custom sqlc
@@ -45,6 +51,12 @@ backend is built for now (§3).
 - Shard routing. A `shard_key` can be declared and is validated, but nothing
   routes or enforces by it yet.
 - Batch operations (`CreateMany`, `GetMany`).
+- Conditional writes beyond the version compare-and-swap (state-transition
+  guards and the like), and upsert variants beyond PK/unique conflict targets.
+  Those are custom sqlc queries.
+- A domain model separate from sqlc's models. The DAL doesn't copy or map
+  rows into a second set of structs; that would be an ORM-style translation
+  layer to maintain.
 - Exposing the IDL as a service contract. The proto is only an IDL. The
   generated code is a library the service layer consumes.
 - Postgres older than 16, drivers other than pgx v5, and Go older than 1.26.
@@ -61,10 +73,9 @@ backend is built for now (§3).
                                │ physical model (tables, indexes)   │
                                │ backend lint                       │
                                │ emitters: schema.sql, queries,     │
-                               │   sqlc.yaml, repo impl, migrations │
+                               │   sqlc.yaml, DAL package,          │
+                               │   migrations                       │
                                └────────────────────────────────────┘
-                                               │
-                        core emitter: domain structs + repository interfaces
 ```
 
 - **A standalone CLI** (`dalforge generate | lint | migrate | lock`) that embeds
@@ -133,10 +144,22 @@ that touches protobuf. Everything after it reads only:
 
   Defaults that need backend knowledge (a sort inherited from an explicit pg
   index) or config (page sizes) are filled in by later passes.
-- **References are names.** Column references (`eq`, `order_by`, `by`,
-  `shard_key`, …) are strings, resolved with `Entity.Column`. Validation
-  (1.4) guarantees they resolve before any emitter runs, so a typo becomes a
-  positioned lint error, not a load failure.
+- **References are proto field names.** Every reference in the IDL (`eq`,
+  `range`, `order_by`, `by`, `columns`, `conflict_on`, `shard_key`, pg index
+  columns) uses the proto field name, the user's source of truth, which is
+  also what request messages and generated Go code use. A field's `Column`
+  (`(dal.v1.field).name`) is purely its physical SQL name. References are
+  strings resolved with `Entity.Field`. Validation (`internal/check`)
+  guarantees they resolve before any emitter runs, so a typo becomes a
+  positioned lint error, not a load failure. Writing a column name by mistake
+  gets a hint naming the right field.
+- **Renames and rolling deploys.** Column identity is the field *number*.
+  Changing a column name, whether via `name` or by renaming a field whose
+  column defaults to its name, is a rename in place (DAL306). Renaming the
+  proto field while pinning `name` to the old column is safe: only the Go and
+  IDL name changes, with no migration. DAL306 therefore compares the
+  snapshot's column names, not proto names. Until phase 3's snapshot exists
+  this isn't guarded, but phase 1 has no migrations to break either.
 - **Errors are structural and reported together.** The loader rejects:
   - non-proto3 files
   - an entity without a primary key
@@ -214,12 +237,12 @@ The lock deliberately holds no environment facts. `pg.version` stays in
 ## 3. Layering
 
 Every concern sits in exactly one layer. A new backend implements the backend
-layer. It never changes the IDL model or the core interfaces.
+layer, including all generated code. It never changes the IDL model.
 
 | Layer | IDL | Generator | Generated code / runtime |
 |---|---|---|---|
-| **Core** (backend-neutral) | `dal.v1`: entity, fields, format, roles, lifecycle, shard key, access patterns, consistency | IR, access-path resolution, core lint (DAL1xx), domain + interface emitter | domain structs, `<Entity>ReadRepository` / `WriteRepository` / `Repository`, runtime `dal` (`Page[T]`, `All`, page-token envelope, sentinel errors) |
-| **Backend** (pg today) | `dal.pg.v1`: physical types, SQL defaults, explicit/partial/covering indexes, index budget | physical model, backend lint (DAL2xx, DAL3xx), schema/query/sqlc/migration emitters | `<pkg>pg` repository implementation, runtime `dal/dalpg` (`DB` pools, keyset codec, error mapping), backend extras such as `WithTx` |
+| **Core** (backend-neutral) | `dal.v1`: entity, fields, format, roles, lifecycle, shard key, access patterns, consistency | IR, access-path resolution, core lint (DAL1xx) | runtime `dal`: `Page[T]`, `All`, page-token envelope, sentinel errors, retrier |
+| **Backend** (pg today) | `dal.pg.v1`: physical types, SQL defaults, explicit/partial/covering indexes, index budget | physical model, backend lint (DAL2xx, DAL3xx), schema/query/sqlc/migration emitters, DAL package emitter | the DAL package per proto package (repository interfaces + implementation + model aliases over sqlc's output), runtime `dal/dalpg` (`DB` pools, keyset codec, error mapping, `WithTx`) |
 
 **Rules that keep the core portable:**
 - Nothing in `dal.v1` names a physical type, an index or a query language.
@@ -233,6 +256,8 @@ layer. It never changes the IDL model or the core interfaces.
   "use the writer pool".
 - Page tokens are opaque strings in the interfaces. What's inside them belongs
   to the backend (§6).
+- No driver types in the generated API: no `pgx`, `pgtype` or `pgconn` in
+  any exported signature or model field (§7).
 - Anything with backend-specific semantics, such as transactions, lives on the
   backend's implementation type, not the core interface.
 
@@ -361,7 +386,8 @@ comes from the core layer and is the same for every backend.
 | repeated scalar | `<type>[]` | `[]T` |
 | message, map, `google.protobuf.Struct` | `jsonb` | `json.RawMessage` |
 
-`optional` fields become pointers (`*T`) in the domain struct. Enums are stored
+`optional` fields become pointers (`*T`) in the model struct, via the
+generated sqlc type overrides (no `pgtype` wrappers). Enums are stored
 by name, which is readable and survives renumbering. There's no `CHECK`
 constraint, because adding a value would then need a migration before the code
 could use it. `custom_type` leaves room for extension types such as
@@ -571,12 +597,14 @@ Core (every backend):
 | DAL101 | error | `range` column isn't the leading `order_by` column |
 | DAL103 | warn | List falls back to primary-key order and the key isn't time-ordered |
 | DAL104 | error | `get.by` / `upsert.conflict_on` isn't covered by a unique constraint |
-| DAL107 | error | request or response message doesn't match the declared pattern |
+| DAL107 | error | request or response message doesn't match the declared pattern. Get: the entity, or exactly the `by` fields. List: exactly the `eq` fields, `<range>_from`/`<range>_to`, `page_size` (int32), `page_token` (string); the response has one repeated entity field plus `next_page_token`. Create/Update/Upsert: the entity. Delete: the entity or exactly the key fields; the response is the entity or `google.protobuf.Empty` |
 | DAL109 | warn | an `order_by` column can be changed by an `update`/`upsert`, so rows can move between pages mid-iteration |
-| DAL110 | error | `shard_key` names a missing or deprecated column |
+| DAL110 | error | `shard_key` names a missing, deprecated or repeated field |
 | DAL111–113 | error | field-number identity violations; see §8 |
 | DAL114 | warn | rpc name doesn't match its shape (`List<Entities>By<Eq…>And<Range>`); suggests the expected name |
 | DAL115 | error | a nullable column is in `order_by` without also being the `range` column |
+| DAL117 | error | a query reference (`by`, `eq`, `range`, `order_by`, `columns`, `conflict_on`) names a missing, deprecated or repeated field; a column name used by mistake gets a hint |
+| DAL118 | error | `update`/`upsert` `columns` sets a key field or a role-managed field |
 | DAL116 | error | a vendored copy of the options protos differs from the hashes in `dalforge.lock` |
 
 Postgres:
@@ -662,7 +690,7 @@ Pages are the primitive, because they're what crosses an API boundary.
 `dal.All` adapts any List method into a Go 1.23 iterator for in-process use:
 
 ```go
-for o, err := range dal.All(ctx, orders.ListByAccountParams{AccountID: id}, repo.ListByAccount) {
+for o, err := range dal.All(ctx, ordersdal.ListByAccountParams{AccountID: id}, repo.ListByAccount) {
 	if err != nil {
 		return err
 	}
@@ -672,16 +700,24 @@ for o, err := range dal.All(ctx, orders.ListByAccountParams{AccountID: id}, repo
 
 ## 7. Generated Go API
 
-The core layer generates one package per proto package. It holds plain domain
-structs and backend-neutral repository interfaces. Each backend generates an
-implementation package next to it (`orderspg` today). Proto messages are never
-used at runtime.
+For each proto package, dalforge generates one **DAL package** (e.g.
+`ordersdal`) next to sqlc's output. It contains:
+
+- **model aliases:** `type Order = sqlcdb.Order`. sqlc's model structs are the
+  entity types; there's no second domain model and no copy or mapping code;
+- **per-store interfaces:** `OrderReadRepository`, `OrderWriteRepository` and
+  `OrderRepository`, one method per rpc;
+- **the implementation** over sqlc's `Queries`: pool routing, retries, page
+  tokens, error mapping and the compare-and-swap follow-up;
+- **parameter structs** named after the request messages.
+
+Services import only the DAL package. They never see sqlc's `Queries`, a
+pool, SQL or page-token internals.
 
 ### From IDL to running code
 
 The IR (§2) is the generator's internal model. It never ships. `dalforge
-generate` reads it and writes two kinds of output, and sqlc fills in the
-middle layer:
+generate` reads it and writes SQL for sqlc plus the DAL package:
 
 ```
                  dalforge generate (reads IR)
@@ -689,55 +725,31 @@ middle layer:
      ┌───────────┴────────────────────────────┐
      ▼                                        ▼
 SQL side (fed to sqlc)                 Go side (dalforge's own)
-  schema/schema.sql                      gen/orders/v1/orders/     domain structs + interfaces
-  queries/generated/*.sql                gen/orders/v1/orderspg/   repository implementation
-  sqlc.yaml
+  schema/schema.sql                      gen/orders/v1/ordersdal/
+  queries/generated/*.sql  (DO NOT EDIT)   model aliases, Read/Write/Repository
+  sqlc.yaml (type overrides, vet)          interfaces, implementation
      │
-     ▼ sqlc generate
-  gen/sqlcdb/   Queries struct, ListOrdersByAccount(...), row structs (pgtype)
+     ▼ sqlc generate                    queries/custom/*.sql  (user-owned,
+  gen/sqlcdb/   Queries, models,          never touched by dalforge)
+                ListOrdersByAccount(...)
 ```
 
 At runtime, a call goes down these layers:
 
 ```
 your service
-  → orders.OrderReadRepository.ListByAccount(ctx, params)   // dalforge interface, plain Go types
-  → orderspg.Repository                                     // dalforge implementation:
+  → ordersdal.OrderReadRepository.ListByAccount(ctx, params)  // interface: models + plain Go types
+  → ordersdal implementation:
         picks reader/writer pool, wraps the call in the retrier,
-        decodes the page token, maps domain ↔ sqlc row types,
-        fetches page_size+1 rows, builds next_page_token
-  → sqlcdb.Queries.ListOrdersByAccount(ctx, args)           // sqlc-generated, the typed SQL call
+        decodes the page token, fetches page_size+1 rows,
+        builds next_page_token, maps errors to dal sentinels
+  → sqlcdb.Queries.ListOrdersByAccount(ctx, args)              // sqlc-generated SQL call
   → pgx v5 pool → Postgres
 ```
 
-**Why two Go layers sit on top of sqlc:**
-- **sqlc's types are SQL-shaped:** `pgtype.UUID`, `pgtype.Timestamptz`, one
-  function per query. The dalforge layer gives services domain-shaped types
-  (`uuid.UUID`, `time.Time`, `*string`) and adds what sqlc doesn't have: pool
-  routing, retries, page tokens, and error mapping to `dal.ErrNotFound` and
-  friends.
-- **Services depend only on the interfaces** in the domain package. Only the
-  composition root knows about `orderspg`, which keeps other backends
-  possible.
-- **Handwritten queries** in `queries/custom/` go through the same sqlc config
-  and land on the same `sqlcdb.Queries`. They're the escape hatch, usable
-  alongside the repositories and inside `WithTx`.
-
-The generated packages import the standard library, pgx, uuid, the sqlc
-output and the `dal`/`dalpg` runtime. Never the IR, protobuf or the generator
-(enforced by step 1.12's `go list -deps` guard).
-
 ```go
-// package orders: core, backend-neutral
-type Order struct {
-	ID        uuid.UUID
-	AccountID uuid.UUID
-	Status    string
-	Note      *string
-	Version   int64
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
+// package ordersdal (generated)
+type Order = sqlcdb.Order // sqlc's model; fields are uuid.UUID, time.Time, *string ...
 
 type OrderReadRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (Order, error)
@@ -746,7 +758,7 @@ type OrderReadRepository interface {
 
 type OrderWriteRepository interface {
 	Create(ctx context.Context, o Order) (Order, error)
-	UpdateStatus(ctx context.Context, o Order) (Order, error)
+	UpdateStatus(ctx context.Context, o Order) (Order, error) // version compare-and-swap
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
@@ -754,39 +766,61 @@ type OrderRepository interface {
 	OrderReadRepository
 	OrderWriteRepository
 }
+
+func NewOrderRepository(db dalpg.DB, opts ...dalpg.Option) OrderRepository
+
+// WithTx runs fn in a transaction on the writer pool. Tx is the DAL's own
+// type, never pgx.Tx.
+func WithTx(ctx context.Context, db dalpg.DB, fn func(tx Tx) error) error
 ```
 
-```go
-// package orderspg: Postgres implementation
-type Repository struct{ /* ... */ }
+### No driver types in the API
 
-var _ orders.OrderRepository = (*Repository)(nil)
+pgx is the driver layer, so no `pgx`, `pgtype` or `pgconn` type appears in
+any exported signature or model field of the DAL package:
 
-func NewRepository(db dalpg.DB) *Repository
+| Leak | Prevention |
+|---|---|
+| sqlc model fields (`pgtype.UUID`, `pgtype.Timestamptz`, `pgtype.Text`, `pgtype.Numeric` …) | the generated `sqlc.yaml` has an override for **every** type dalforge maps: `uuid.UUID`, `time.Time`, pointers for nullable columns, `json.RawMessage`, `netip.Prefix`, …. A `custom_type` must declare its `go_type` |
+| transactions (`pgx.Tx`) | `WithTx` hands out the DAL's own `Tx` |
+| errors (`pgx.ErrNoRows`, `*pgconn.PgError`) | mapped to `dal` sentinels; the driver error is only the wrapped cause |
+| pools (`*pgxpool.Pool`) | only at the composition root, when constructing `dalpg.DB{Reader, Writer}` |
 
-// WithTx runs fn in a transaction on the writer pool. It's Postgres-only, so it
-// isn't on the core interface.
-func (r *Repository) WithTx(ctx context.Context, fn func(tx *Tx) error) error
-```
+A test (step 1.12) inspects the generated package's exported API with
+`go/types` and fails on any driver type. A `go list -deps` check keeps the IR,
+protobuf and the generator out of it.
 
-- **Services depend on the core interfaces** (`orders.OrderReadRepository`
-  etc.), and only the composition root knows about `orderspg`. Switching
-  backends means changing the constructor.
-- **Postgres routing:** `dalpg.DB` holds a `Reader` and a `Writer`
-  `*pgxpool.Pool`. Eventual reads go to the reader. `CONSISTENCY_STRONG` reads
-  and all writes go to the writer. A single-instance setup passes the same pool
-  twice.
-- **Errors and retries:** see below.
-- **Transactions:** `orderspg.Tx` exposes the entity's read and write methods
-  bound to the transaction, plus `Queries()` for custom sqlc queries in the
-  same transaction. They're in v1 if they stay this thin (sqlc's
-  `Queries.WithTx(pgx.Tx)` does most of the work), and are cut otherwise.
+### Writes: basic and safe, the rest is custom
+
+Generated writes cover the common footguns and nothing more:
+
+- **Update with a `ROLE_VERSION` field** is always a compare-and-swap:
+  `SET …, version = version + 1 … WHERE id = @id AND version = @version`. If
+  zero rows are updated, a follow-up existence check (only on that failure
+  path) tells `ErrNotFound` from `ErrVersionConflict`.
+- **Upsert** targets the primary key or a unique `conflict_on`, and the last
+  writer wins: the version is bumped, with no compare-and-swap, so it stays
+  idempotent for retries. It never revives a soft-deleted row
+  (`DO UPDATE … WHERE deleted_at IS NULL`); hitting one returns
+  `ErrAlreadyExists`.
+- **Delete** is soft when the entity has `ROLE_DELETE_TIME`.
+
+Anything richer goes in a custom sqlc query under `queries/custom/`. That
+includes state-transition guards (`WHERE status = 'pending'`), unconditional
+overwrites of a versioned row, multi-row updates and joins. Generated files
+are marked `DO NOT EDIT` and live only under `queries/generated/`, so the two
+never mix. Custom queries land on the same sqlc `Queries` and can join a
+`WithTx` transaction.
+
+- **Postgres routing:** `dalpg.DB` holds a `Reader` and a `Writer` pool.
+  Eventual reads go to the reader. `CONSISTENCY_STRONG` reads and all writes
+  go to the writer. A single-instance setup passes the same pool twice.
 - **Runtime libraries** live in this module and are imported, not generated,
   so bug fixes don't need a regeneration:
   - `dal`: `Page[T]`, `All`, the page-token envelope, sentinel errors,
     `Retrier`, `Op`, `Retryability`
-  - `dal/dalpg`: `DB`, the keyset payload codec, the SQLSTATE classifier and
-    error mapping
+  - `dal/dalpg`: `DB`, `Option`, `WithTx`, the keyset payload codec, the
+    SQLSTATE classifier and error mapping
 
 ### Errors and retries
 
@@ -795,7 +829,7 @@ func (r *Repository) WithTx(ctx context.Context, fn func(tx *Tx) error) error
 | Sentinel | Postgres source |
 |---|---|
 | `dal.ErrNotFound` | `pgx.ErrNoRows` |
-| `dal.ErrVersionConflict` | a CAS update that matched no row |
+| `dal.ErrVersionConflict` | a CAS update that matched no row while the row exists (follow-up check) |
 | `dal.ErrAlreadyExists` | `23505` unique violation |
 | `dal.ErrInvalidPageToken` | a page token that fails to decode or doesn't match the query |
 
@@ -882,7 +916,7 @@ DALForge:
   backoff with full jitter (25 ms base, 1 s cap), following `ShouldRetry` and
   respecting the context. `dal.NoRetry` turns retries off.
 
-The generated repositories wrap each method in `retrier.Do`. Inside `WithTx`,
+The generated implementation wraps each method in `retrier.Do`. Inside `WithTx`,
 individual statements are never retried: a `40001` aborts the whole
 transaction, so only the outer `WithTx` can be retried.
 
@@ -966,7 +1000,7 @@ Renaming in place (the same number with a new name) is error `DAL306`.
 | DAL303 | column type change. Needs a table rewrite and breaks N; use add + deprecate |
 | DAL304 | tighten to `NOT NULL` on an existing column. Emitted as a `CHECK ... NOT VALID` + `VALIDATE` sequence, never a direct `SET NOT NULL` |
 | DAL305 | adding a unique constraint. Emitted as `CREATE UNIQUE INDEX CONCURRENTLY`, then `ADD CONSTRAINT ... USING INDEX` |
-| DAL306 | rename in place (same field number, new name). Old code still uses the old column name; use add + deprecate |
+| DAL306 | rename in place: same field number, new *column* name. Old code still uses the old column; use add + deprecate. Renaming only the proto field while pinning `(dal.v1.field).name` is allowed |
 
 **Future option: Atlas.** Atlas could replace the diff engine, via declarative
 `schema.sql` plus its lint analyzers, while still emitting golang-migrate
@@ -988,8 +1022,7 @@ queries/generated/*.sql     # generated; "Code generated by dalforge. DO NOT EDI
 queries/custom/*.sql        # handwritten sqlc queries, never touched by dalforge
 sqlc.yaml                   # generated
 gen/sqlcdb/                 # sqlc output (both query sets)
-gen/orders/v1/orders/       # core: domain structs + repository interfaces
-gen/orders/v1/orderspg/     # pg backend: repository implementation
+gen/orders/v1/ordersdal/    # DAL package: model aliases, Read/Write/Repository interfaces, implementation
 ```
 
 Generated and custom queries go through **one** sqlc config, so they share a
@@ -1112,8 +1145,9 @@ phase 1, List and lint in phase 2, and a migration walkthrough in phase 3.
 ## 12. Roadmap
 
 1. **CRUD by key:** IR loader, core/backend split, type mapping, `schema.sql`,
-   Get/Create/Update/Delete queries, `sqlc.yaml`, domain structs, core
-   interfaces and the pg implementation, the `dal` and `dal/dalpg` runtimes.
+   Get/Create/Update/Delete queries, `sqlc.yaml` with full type overrides,
+   the DAL package (model aliases, interfaces, implementation), the `dal` and
+   `dal/dalpg` runtimes, and the no-driver-types API guard.
    Error classification and the pluggable retrier. Integration tests against
    the compose Postgres 16.9. First cut of
    `examples/orders`.
@@ -1132,7 +1166,9 @@ phase 1, List and lint in phase 2, and a migration walkthrough in phase 3.
 | Topic | Decision |
 |---|---|
 | Generator packaging | Standalone CLI embedding protocompile; buf plugin later |
-| Domain types | Generated plain Go structs; proto only as IDL |
+| Domain types | sqlc's model structs, re-exported as type aliases from the generated DAL package. No separate domain model and no copy layer (revised 2026-09-30; originally generated structs). Proto is only the IDL |
+| Driver isolation | No `pgx`/`pgtype`/`pgconn` types in the DAL package's exported API: full sqlc type overrides, the DAL's own `Tx`, errors mapped to `dal` sentinels, pools only at the composition root. Enforced by a `go/types` test |
+| Generated writes | Basic and safe only: version compare-and-swap on update (follow-up existence check tells `ErrNotFound` from `ErrVersionConflict`), upsert on the PK or a unique field (last writer wins, never revives soft-deleted rows), soft delete. Everything else is a custom sqlc query in the user-owned `queries/custom/` |
 | Index model | Query-first; explicit indexes only for partial/covering/sort-pinning |
 | Sort with no `order_by` | Inherit from matching explicit index, else PK + DAL103 |
 | Migrations | Snapshot diff → golang-migrate SQL; Atlas as a future backend |
@@ -1141,7 +1177,7 @@ phase 1, List and lint in phase 2, and a migration walkthrough in phase 3.
 | Sharding | `shard_key` declared and validated; routing and enforcement out of scope |
 | Page tokens | In scope. Base64url JSON envelope, unsigned, bound to query + filters |
 | Batch operations | Out of scope |
-| Backend layering | Core IDL/IR/interfaces are backend-neutral; Postgres is the reference backend; DynamoDB mapping validated on paper only |
+| Backend layering | The IDL, IR and lint are backend-neutral; generated code is backend-specific because the backend is chosen at declaration time. Postgres is the reference backend; DynamoDB mapping validated on paper only |
 | Platform | Aurora PostgreSQL 16.x, pgx v5, Go 1.26+ |
 | Options Go bindings | protoc (pinned in mise) + protoc-gen-go (a `go tool` dependency, so it always matches the protobuf runtime); no buf. Checked in next to the protos; `mise run proto:check` (part of `check`) fails on stale output; unit tests pin extension numbers and import paths. Field-number safety of user IDL comes from the snapshot rules (DAL111–113) |
 | Testing | Unit + golden in `mise run check`; `integration` build tag against a docker compose `postgres:16.9` in `mise run test:integration`; `check:all` for CI |
