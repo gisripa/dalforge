@@ -1,0 +1,23 @@
+// DAL209: type mappings that don't exist or don't fit the field's kind.
+syntax = "proto3";
+
+package dal209;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+
+message Metric {
+  option (dal.v1.table) = {name: "metrics"};
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+  uint64 counter = 2;
+  int64 ref = 3 [(dal.v1.field).format = FORMAT_UUID];
+  int64 legacy_id = 4 [(dal.pg.v1.column).type = TYPE_UUID];
+  // Valid control: an int32 stored as smallint.
+  int32 small = 5 [(dal.pg.v1.column).type = TYPE_SMALLINT];
+  // Valid control: uint64 with an explicit custom type.
+  uint64 big = 6 [(dal.pg.v1.column) = {
+    custom_type: "numeric(20, 0)"
+    go_type: "string"
+  }];
+}

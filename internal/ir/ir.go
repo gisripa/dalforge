@@ -62,6 +62,18 @@ func (e *Entity) Field(name string) *Field {
 	return nil
 }
 
+// FieldByColumn returns the field stored in the named SQL column, or nil.
+// Lint uses it to hint when a column name was written where a field name
+// belongs.
+func (e *Entity) FieldByColumn(column string) *Field {
+	for _, f := range e.Fields {
+		if f.Column == column {
+			return f
+		}
+	}
+	return nil
+}
+
 // PrimaryKey returns the primary-key field names in declaration order.
 func (e *Entity) PrimaryKey() []string {
 	var pk []string

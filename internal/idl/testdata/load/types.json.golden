@@ -135,7 +135,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 54,
+              "line": 55,
               "col": 3
             }
           },
@@ -147,7 +147,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 55,
+              "line": 59,
               "col": 3
             }
           },
@@ -159,7 +159,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 56,
+              "line": 63,
               "col": 3
             }
           },
@@ -171,7 +171,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 57,
+              "line": 64,
               "col": 3
             }
           },
@@ -183,7 +183,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 58,
+              "line": 65,
               "col": 3
             }
           },
@@ -195,7 +195,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 59,
+              "line": 66,
               "col": 3
             }
           },
@@ -215,7 +215,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 60,
+              "line": 67,
               "col": 3
             }
           },
@@ -227,7 +227,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 61,
+              "line": 68,
               "col": 3
             }
           },
@@ -240,7 +240,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 62,
+              "line": 69,
               "col": 3
             }
           },
@@ -253,7 +253,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 63,
+              "line": 70,
               "col": 3
             }
           },
@@ -266,7 +266,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 64,
+              "line": 71,
               "col": 3
             }
           },
@@ -278,7 +278,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 65,
+              "line": 72,
               "col": 3
             }
           },
@@ -290,7 +290,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 66,
+              "line": 73,
               "col": 3
             }
           },
@@ -302,7 +302,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 67,
+              "line": 74,
               "col": 3
             }
           },
@@ -315,7 +315,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 68,
+              "line": 75,
               "col": 3
             }
           },
@@ -327,7 +327,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 69,
+              "line": 76,
               "col": 3
             }
           },
@@ -341,7 +341,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 70,
+              "line": 77,
               "col": 3
             }
           },
@@ -354,7 +354,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 75,
+              "line": 82,
               "col": 3
             }
           },
@@ -367,7 +367,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 79,
+              "line": 86,
               "col": 3
             }
           },
@@ -379,7 +379,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 80,
+              "line": 87,
               "col": 3
             }
           },
@@ -391,7 +391,7 @@
             "state": "deprecated",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 84,
+              "line": 91,
               "col": 3
             }
           },
@@ -403,7 +403,7 @@
             "state": "active",
             "pos": {
               "file": "types/v1/types.proto",
-              "line": 85,
+              "line": 92,
               "col": 3
             }
           }
@@ -463,6 +463,14 @@
         ],
         "index_budget": 3,
         "columns": {
+          "11": {
+            "custom_type": "numeric(20, 0)",
+            "go_type": "string"
+          },
+          "12": {
+            "custom_type": "numeric(20, 0)",
+            "go_type": "string"
+          },
           "28": {
             "type": "numeric"
           },

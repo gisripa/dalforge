@@ -51,8 +51,15 @@ message HTTPRequestLog {
   sfixed64 sf64 = 8;
   uint32 u32 = 9;
   fixed32 f32 = 10;
-  uint64 u64 = 11;
-  fixed64 f64 = 12;
+  // uint64 has no native Postgres type; the custom type keeps the full range.
+  uint64 u64 = 11 [(dal.pg.v1.column) = {
+    custom_type: "numeric(20, 0)"
+    go_type: "string"
+  }];
+  fixed64 f64 = 12 [(dal.pg.v1.column) = {
+    custom_type: "numeric(20, 0)"
+    go_type: "string"
+  }];
   float fl = 13;
   double db = 14;
   string path = 15;

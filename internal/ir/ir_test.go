@@ -25,6 +25,12 @@ func TestEntityLookups(t *testing.T) {
 	if got := e.Field("name"); got != nil {
 		t.Errorf("Field(name) = %v, want nil: lookups use proto field names, not columns", got)
 	}
+	if got := e.FieldByColumn("name"); got == nil || got.Name != "display_name" {
+		t.Errorf("FieldByColumn(name) = %v, want display_name", got)
+	}
+	if got := e.FieldByColumn("display_name"); got != nil {
+		t.Errorf("FieldByColumn(display_name) = %v, want nil", got)
+	}
 	if got := strings.Join(e.PrimaryKey(), ","); got != "tenant_id,id" {
 		t.Errorf("PrimaryKey() = %q, want declaration order tenant_id,id", got)
 	}

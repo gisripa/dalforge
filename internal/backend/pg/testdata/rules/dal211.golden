@@ -1,0 +1,3 @@
+dal211.proto:10:1: error DAL211: index "orders_by_state" columns: dal211.Order has no field "order_state" ("order_state" is the column of field "state"; references use field names)
+dal211.proto:10:1: error DAL211: index "orders_by_state" columns: field "created_at" is listed more than once
+dal211.proto:10:1: error DAL211: index "orders_by_state" include: field "legacy" is deprecated

@@ -1,0 +1,31 @@
+// DAL208: custom_type needs go_type, go_type needs custom_type, and
+// extension types need their extension declared.
+syntax = "proto3";
+
+package dal208;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+
+option (dal.pg.v1.file) = {extensions: ["citext"]};
+
+message Doc {
+  option (dal.v1.table) = {name: "docs"};
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+  // Valid control: citext is declared.
+  string email = 2 [(dal.pg.v1.column) = {
+    custom_type: "citext"
+    go_type: "string"
+  }];
+  string embedding = 3 [(dal.pg.v1.column) = {
+    custom_type: "vector(3)"
+    go_type: "github.com/pgvector/pgvector-go.Vector"
+  }];
+  string shape = 4 [(dal.pg.v1.column).custom_type = "geometry(Point, 4326)"];
+  string label = 5 [(dal.pg.v1.column).go_type = "string"];
+  string blob = 6 [(dal.pg.v1.column) = {
+    custom_type: "my_domain"
+    go_type: "not a type"
+  }];
+}

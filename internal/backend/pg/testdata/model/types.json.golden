@@ -1,0 +1,403 @@
+{
+  "extensions": [
+    "vector"
+  ],
+  "tables": [
+    {
+      "name": "http_request_log",
+      "entity": "types.v1.HTTPRequestLog",
+      "columns": [
+        {
+          "name": "id",
+          "field": "id",
+          "number": 1,
+          "type": "bigint",
+          "not_null": true,
+          "go_type": {
+            "name": "int64"
+          },
+          "state": "active"
+        },
+        {
+          "name": "ok",
+          "field": "ok",
+          "number": 2,
+          "type": "boolean",
+          "not_null": true,
+          "go_type": {
+            "name": "bool"
+          },
+          "state": "active"
+        },
+        {
+          "name": "i32",
+          "field": "i32",
+          "number": 3,
+          "type": "integer",
+          "not_null": true,
+          "go_type": {
+            "name": "int32"
+          },
+          "state": "active"
+        },
+        {
+          "name": "s32",
+          "field": "s32",
+          "number": 4,
+          "type": "integer",
+          "not_null": true,
+          "go_type": {
+            "name": "int32"
+          },
+          "state": "active"
+        },
+        {
+          "name": "sf32",
+          "field": "sf32",
+          "number": 5,
+          "type": "integer",
+          "not_null": true,
+          "go_type": {
+            "name": "int32"
+          },
+          "state": "active"
+        },
+        {
+          "name": "i64",
+          "field": "i64",
+          "number": 6,
+          "type": "bigint",
+          "not_null": true,
+          "go_type": {
+            "name": "int64"
+          },
+          "state": "active"
+        },
+        {
+          "name": "s64",
+          "field": "s64",
+          "number": 7,
+          "type": "bigint",
+          "not_null": true,
+          "go_type": {
+            "name": "int64"
+          },
+          "state": "active"
+        },
+        {
+          "name": "sf64",
+          "field": "sf64",
+          "number": 8,
+          "type": "bigint",
+          "not_null": true,
+          "go_type": {
+            "name": "int64"
+          },
+          "state": "active"
+        },
+        {
+          "name": "u32",
+          "field": "u32",
+          "number": 9,
+          "type": "bigint",
+          "not_null": true,
+          "go_type": {
+            "name": "int64"
+          },
+          "state": "active"
+        },
+        {
+          "name": "f32",
+          "field": "f32",
+          "number": 10,
+          "type": "bigint",
+          "not_null": true,
+          "go_type": {
+            "name": "int64"
+          },
+          "state": "active"
+        },
+        {
+          "name": "u64",
+          "field": "u64",
+          "number": 11,
+          "type": "numeric(20, 0)",
+          "not_null": true,
+          "go_type": {
+            "name": "string"
+          },
+          "state": "active"
+        },
+        {
+          "name": "f64",
+          "field": "f64",
+          "number": 12,
+          "type": "numeric(20, 0)",
+          "not_null": true,
+          "go_type": {
+            "name": "string"
+          },
+          "state": "active"
+        },
+        {
+          "name": "fl",
+          "field": "fl",
+          "number": 13,
+          "type": "real",
+          "not_null": true,
+          "go_type": {
+            "name": "float32"
+          },
+          "state": "active"
+        },
+        {
+          "name": "db",
+          "field": "db",
+          "number": 14,
+          "type": "double precision",
+          "not_null": true,
+          "go_type": {
+            "name": "float64"
+          },
+          "state": "active"
+        },
+        {
+          "name": "path",
+          "field": "path",
+          "number": 15,
+          "type": "text",
+          "not_null": true,
+          "go_type": {
+            "name": "string"
+          },
+          "state": "active"
+        },
+        {
+          "name": "body",
+          "field": "body",
+          "number": 16,
+          "type": "bytea",
+          "not_null": true,
+          "go_type": {
+            "name": "[]byte"
+          },
+          "state": "active"
+        },
+        {
+          "name": "color",
+          "field": "color",
+          "number": 17,
+          "type": "text",
+          "not_null": true,
+          "go_type": {
+            "name": "string"
+          },
+          "state": "active"
+        },
+        {
+          "name": "created_at",
+          "field": "created_at",
+          "number": 18,
+          "type": "timestamptz",
+          "not_null": true,
+          "go_type": {
+            "import": "time",
+            "name": "Time"
+          },
+          "state": "active"
+        },
+        {
+          "name": "finished_at",
+          "field": "finished_at",
+          "number": 19,
+          "type": "timestamptz",
+          "go_type": {
+            "import": "time",
+            "name": "Time",
+            "pointer": true
+          },
+          "state": "active"
+        },
+        {
+          "name": "note",
+          "field": "note",
+          "number": 20,
+          "type": "text",
+          "go_type": {
+            "name": "string",
+            "pointer": true
+          },
+          "state": "active"
+        },
+        {
+          "name": "tags",
+          "field": "tags",
+          "number": 21,
+          "type": "text[]",
+          "not_null": true,
+          "go_type": {
+            "name": "string",
+            "slice": true
+          },
+          "state": "active"
+        },
+        {
+          "name": "headers",
+          "field": "headers",
+          "number": 22,
+          "type": "jsonb",
+          "not_null": true,
+          "go_type": {
+            "import": "encoding/json",
+            "name": "RawMessage"
+          },
+          "state": "active"
+        },
+        {
+          "name": "meta",
+          "field": "meta",
+          "number": 23,
+          "type": "jsonb",
+          "not_null": true,
+          "go_type": {
+            "import": "encoding/json",
+            "name": "RawMessage"
+          },
+          "state": "active"
+        },
+        {
+          "name": "nested",
+          "field": "nested",
+          "number": 24,
+          "type": "jsonb",
+          "not_null": true,
+          "go_type": {
+            "import": "encoding/json",
+            "name": "RawMessage"
+          },
+          "state": "active"
+        },
+        {
+          "name": "nested_list",
+          "field": "nested_list",
+          "number": 25,
+          "type": "jsonb",
+          "not_null": true,
+          "go_type": {
+            "import": "encoding/json",
+            "name": "RawMessage"
+          },
+          "state": "active"
+        },
+        {
+          "name": "status",
+          "field": "status",
+          "number": 26,
+          "type": "integer",
+          "not_null": true,
+          "go_type": {
+            "name": "int32"
+          },
+          "state": "active"
+        },
+        {
+          "name": "req_id",
+          "field": "request_id",
+          "number": 27,
+          "type": "uuid",
+          "not_null": true,
+          "unique": true,
+          "go_type": {
+            "import": "github.com/google/uuid",
+            "name": "UUID"
+          },
+          "state": "active"
+        },
+        {
+          "name": "amount",
+          "field": "amount",
+          "number": 28,
+          "type": "numeric",
+          "not_null": true,
+          "go_type": {
+            "name": "string"
+          },
+          "state": "active"
+        },
+        {
+          "name": "payload",
+          "field": "payload",
+          "number": 29,
+          "type": "jsonb",
+          "not_null": true,
+          "go_type": {
+            "import": "encoding/json",
+            "name": "RawMessage"
+          },
+          "state": "active"
+        },
+        {
+          "name": "embedding",
+          "field": "embedding",
+          "number": 30,
+          "type": "vector(3)",
+          "not_null": true,
+          "go_type": {
+            "import": "github.com/pgvector/pgvector-go",
+            "name": "Vector"
+          },
+          "state": "active"
+        },
+        {
+          "name": "old_status",
+          "field": "old_status",
+          "number": 31,
+          "type": "text",
+          "go_type": {
+            "name": "string",
+            "pointer": true
+          },
+          "state": "deprecated"
+        },
+        {
+          "name": "ratio",
+          "field": "ratio",
+          "number": 32,
+          "type": "double precision",
+          "not_null": true,
+          "go_type": {
+            "name": "float64"
+          },
+          "state": "active"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "indexes": [
+        {
+          "name": "logs_by_path",
+          "columns": [
+            {
+              "column": "path"
+            },
+            {
+              "column": "created_at",
+              "desc": true
+            }
+          ],
+          "include": [
+            "status"
+          ],
+          "where": "status \u003e= 500"
+        }
+      ],
+      "index_budget": 3,
+      "pos": {
+        "file": "types/v1/types.proto",
+        "line": 23,
+        "col": 1
+      }
+    }
+  ]
+}

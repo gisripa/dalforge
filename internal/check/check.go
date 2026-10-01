@@ -88,13 +88,17 @@ func refs(l *diag.List, rule string, pos ir.Pos, e *ir.Entity, what string, name
 	}
 }
 
-// suggest names a field whose column matches, since references use proto
-// field names, not column names.
+// suggest names the field stored in a column called name, since references
+// use proto field names, not column names.
 func suggest(e *ir.Entity, name string) string {
-	for _, f := range e.Fields {
-		if f.Column == name && f.Name != name {
-			return fmt.Sprintf(" (%q is the column of field %q; references use field names)", name, f.Name)
-		}
+	return ColumnHint(e, name)
+}
+
+// ColumnHint returns a hint when name is a column name rather than a field
+// name, or "". Backend rules reuse it for their own references.
+func ColumnHint(e *ir.Entity, name string) string {
+	if f := e.FieldByColumn(name); f != nil && f.Name != name {
+		return fmt.Sprintf(" (%q is the column of field %q; references use field names)", name, f.Name)
 	}
 	return ""
 }

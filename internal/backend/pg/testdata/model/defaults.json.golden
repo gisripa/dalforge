@@ -1,0 +1,138 @@
+{
+  "tables": [
+    {
+      "name": "item",
+      "entity": "defaults.v1.Item",
+      "columns": [
+        {
+          "name": "tenant_id",
+          "field": "tenant_id",
+          "number": 1,
+          "type": "uuid",
+          "not_null": true,
+          "go_type": {
+            "import": "github.com/google/uuid",
+            "name": "UUID"
+          },
+          "state": "active"
+        },
+        {
+          "name": "id",
+          "field": "id",
+          "number": 2,
+          "type": "uuid",
+          "not_null": true,
+          "go_type": {
+            "import": "github.com/google/uuid",
+            "name": "UUID"
+          },
+          "state": "active"
+        },
+        {
+          "name": "sku",
+          "field": "sku",
+          "number": 3,
+          "type": "text",
+          "not_null": true,
+          "unique": true,
+          "go_type": {
+            "name": "string"
+          },
+          "state": "active"
+        },
+        {
+          "name": "name",
+          "field": "name",
+          "number": 4,
+          "type": "text",
+          "not_null": true,
+          "go_type": {
+            "name": "string"
+          },
+          "state": "active"
+        },
+        {
+          "name": "color",
+          "field": "color",
+          "number": 5,
+          "type": "text",
+          "go_type": {
+            "name": "string",
+            "pointer": true
+          },
+          "state": "active"
+        },
+        {
+          "name": "legacy_code",
+          "field": "legacy_code",
+          "number": 6,
+          "type": "text",
+          "go_type": {
+            "name": "string",
+            "pointer": true
+          },
+          "state": "deprecated"
+        },
+        {
+          "name": "version",
+          "field": "version",
+          "number": 7,
+          "type": "bigint",
+          "not_null": true,
+          "default": "1",
+          "go_type": {
+            "name": "int64"
+          },
+          "state": "active"
+        },
+        {
+          "name": "created_at",
+          "field": "created_at",
+          "number": 8,
+          "type": "timestamptz",
+          "not_null": true,
+          "default": "now()",
+          "go_type": {
+            "import": "time",
+            "name": "Time"
+          },
+          "state": "active"
+        },
+        {
+          "name": "updated_at",
+          "field": "updated_at",
+          "number": 9,
+          "type": "timestamptz",
+          "not_null": true,
+          "default": "now()",
+          "go_type": {
+            "import": "time",
+            "name": "Time"
+          },
+          "state": "active"
+        },
+        {
+          "name": "deleted_at",
+          "field": "deleted_at",
+          "number": 10,
+          "type": "timestamptz",
+          "go_type": {
+            "import": "time",
+            "name": "Time",
+            "pointer": true
+          },
+          "state": "active"
+        }
+      ],
+      "primary_key": [
+        "tenant_id",
+        "id"
+      ],
+      "pos": {
+        "file": "defaults/v1/defaults.proto",
+        "line": 10,
+        "col": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "tables": [
+    {
+      "name": "orders",
+      "entity": "orders.v1.Order",
+      "columns": [
+        {
+          "name": "id",
+          "field": "id",
+          "number": 1,
+          "type": "uuid",
+          "not_null": true,
+          "go_type": {
+            "import": "github.com/google/uuid",
+            "name": "UUID"
+          },
+          "state": "active"
+        },
+        {
+          "name": "account_id",
+          "field": "account_id",
+          "number": 2,
+          "type": "uuid",
+          "not_null": true,
+          "go_type": {
+            "import": "github.com/google/uuid",
+            "name": "UUID"
+          },
+          "state": "active"
+        },
+        {
+          "name": "status",
+          "field": "status",
+          "number": 3,
+          "type": "text",
+          "not_null": true,
+          "default": "'pending'",
+          "go_type": {
+            "name": "string"
+          },
+          "state": "active"
+        },
+        {
+          "name": "note",
+          "field": "note",
+          "number": 4,
+          "type": "text",
+          "go_type": {
+            "name": "string",
+            "pointer": true
+          },
+          "state": "active"
+        },
+        {
+          "name": "version",
+          "field": "version",
+          "number": 5,
+          "type": "bigint",
+          "not_null": true,
+          "default": "1",
+          "go_type": {
+            "name": "int64"
+          },
+          "state": "active"
+        },
+        {
+          "name": "created_at",
+          "field": "created_at",
+          "number": 6,
+          "type": "timestamptz",
+          "not_null": true,
+          "default": "now()",
+          "go_type": {
+            "import": "time",
+            "name": "Time"
+          },
+          "state": "active"
+        },
+        {
+          "name": "updated_at",
+          "field": "updated_at",
+          "number": 7,
+          "type": "timestamptz",
+          "not_null": true,
+          "default": "now()",
+          "go_type": {
+            "import": "time",
+            "name": "Time"
+          },
+          "state": "active"
+        },
+        {
+          "name": "deleted_at",
+          "field": "deleted_at",
+          "number": 8,
+          "type": "timestamptz",
+          "go_type": {
+            "import": "time",
+            "name": "Time",
+            "pointer": true
+          },
+          "state": "active"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "index_budget": 4,
+      "pos": {
+        "file": "orders/v1/orders.proto",
+        "line": 12,
+        "col": 1
+      }
+    }
+  ]
+}

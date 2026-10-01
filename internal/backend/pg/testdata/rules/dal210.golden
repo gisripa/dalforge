@@ -1,0 +1,2 @@
+dal210.proto:8:1: error DAL210: table "orders" is also used by dal210.LegacyOrder; set a different (dal.v1.table).name
+dal210.proto:13:3: error DAL210: column "state" of orders is also used by field "state"

@@ -387,7 +387,13 @@ comes from the core layer and is the same for every backend.
 | message, map, `google.protobuf.Struct` | `jsonb` | `json.RawMessage` |
 
 `optional` fields become pointers (`*T`) in the model struct, via the
-generated sqlc type overrides (no `pgtype` wrappers). Enums are stored
+generated sqlc type overrides (no `pgtype` wrappers). The Go type follows the
+*physical* column: nullable columns are pointers, except where nil already
+means NULL (`[]byte`, slices, `json.RawMessage`), so a deprecated column whose
+`NOT NULL` was relaxed is a pointer too. Role columns get schema defaults
+(`now()` for create/update time, `1` for version), so adding them later stays
+DAL302-safe. The physical model lives in `internal/backend/pg`
+(`pg.Build`). Enums are stored
 by name, which is readable and survives renumbering. There's no `CHECK`
 constraint, because adding a value would then need a migration before the code
 could use it. `custom_type` leaves room for extension types such as
@@ -614,11 +620,14 @@ Postgres:
 | DAL201 | warn | index budget exceeded |
 | DAL202 | error | `order_by` contradicts an explicit index whose leading columns equal `eq` |
 | DAL203 | warn | mixed sort directions; the keyset predicate can't use a row comparison |
-| DAL204 | error | table or column name is a SQL reserved word; set `name` |
+| DAL204 | error | a table, column or index name isn't a valid unquoted identifier: lowercase letters, digits and `_`, starting with a letter or `_`. Also flagged: longer than 63 bytes (Postgres silently truncates), or a reserved SQL keyword. dalforge never quotes identifiers, so names must also work in custom queries |
 | DAL205 | error | name collision between a generated query and a custom sqlc query |
 | DAL206 | info | two List rpcs share an equality prefix but sort differently; aligning `order_by` would let them share one index |
 | DAL207 | error | the deploy target (`dalforge.yaml` `pg.version`) is older than `min_version`, or a type/feature in use needs a newer version |
-| DAL208 | error | a `custom_type` comes from an undeclared extension, or has no `go_type` |
+| DAL208 | error | a `custom_type` has no (or an invalid) `go_type`, a `go_type` is set without `custom_type`, or a known extension type (`vector`, `geometry`, `citext`, …) is used without declaring its extension in the file's `(dal.pg.v1.file).extensions` |
+| DAL209 | error | no or incompatible type mapping: `uint64` without `custom_type`, a `format` on a non-string field, or an explicit pg `type` that doesn't fit the field's kind (e.g. `uuid` on `int64`) |
+| DAL210 | error | two entities map to the same table, or two fields to the same column |
+| DAL211 | error | an explicit pg index references (`columns`, `include`) a missing, deprecated or repeated field. A column name used by mistake gets a hint |
 | DAL3xx | error | migration safety; see §8 |
 
 DAL4xx is reserved for a future DynamoDB backend.
@@ -773,6 +782,20 @@ func NewOrderRepository(db dalpg.DB, opts ...dalpg.Option) OrderRepository
 // type, never pgx.Tx.
 func WithTx(ctx context.Context, db dalpg.DB, fn func(tx Tx) error) error
 ```
+
+### Deprecated columns and sqlc's view of the schema
+
+Generated queries never read or write deprecated columns. If release N still
+selected one, release N+1's DROP would break N mid-deploy. But sqlc builds its
+model structs from the schema it's given. If that schema included deprecated
+columns, queries leaving them out would return per-query `…Row` types instead
+of the model, and the DAL's model aliases would break.
+
+So dalforge gives sqlc a **schema view without deprecated columns**, while
+the migrations keep the real columns until the drop. sqlc's models then match
+exactly what generated queries select. As a bonus, custom queries can't read a
+deprecated column by accident: sqlc rejects them at generate time. (Proposed
+2026-09-30, built in step 1.6.)
 
 ### No driver types in the API
 
@@ -1142,7 +1165,21 @@ A runnable demo exercises CRUD and pagination against Postgres 16.
 checked-in output can't go stale. The example grows with each phase: CRUD in
 phase 1, List and lint in phase 2, and a migration walkthrough in phase 3.
 
-## 12. Roadmap
+## 12. Documentation
+
+Because DALForge introduces its own IDL, the **user manual** (`docs/manual/`)
+is a first-class deliverable. This design doc records decisions and their
+reasons; the manual teaches users every option, access pattern, combination,
+limitation, type mapping and lint rule, without relying on `examples/`.
+
+The manual is kept true by tests:
+- every rule ID has a catalog entry, and every option field is documented;
+- complete IDL snippets in the manual compile;
+- diagnostics link to their rule entry.
+
+Every increment updates the manual sections it affects.
+
+## 13. Roadmap
 
 1. **CRUD by key:** IR loader, core/backend split, type mapping, `schema.sql`,
    Get/Create/Update/Delete queries, `sqlc.yaml` with full type overrides,
@@ -1187,6 +1224,7 @@ phase 1, List and lint in phase 2, and a migration walkthrough in phase 3.
 | Distribution | Consumers install dalforge with mise's `go:` backend (version in their `mise.toml`). The binary stays CGO-free, and its version comes from build info |
 | sqlc pinning | A prebuilt binary through mise in the consuming repo, checked against `dalforge.lock`; replaces `go tool sqlc` (cgo) |
 | Toolchain pinning | `dalforge.lock` (TOML: dalforge version, options hashes, sqlc version), committed. Mismatches fail until `dalforge lock -upgrade`. Separate from the schema snapshot. Per-PG-version option sets were rejected |
+| sqlc schema view | sqlc gets the schema without deprecated columns (migrations keep them until the drop), so its models match generated queries and custom queries can't touch deprecated columns (proposed; step 1.6) |
 | Container runtime | Colima via mise (dedicated `dalforge` profile, repo-scoped `DOCKER_HOST`); native Docker in CI. Chosen over embedded Postgres so that future backends and fault-injection proxies share one mechanism |
 | Retries | SQLSTATE classification into Retryable / RetryableIfIdempotent / NotRetryable, plus per-op idempotency; pluggable `dal.Retrier` (closure-friendly) and classifier; built-in default; failsafe-go adapter shown in examples |
 | Onboarding | `examples/orders` standalone consumer module with a README walkthrough, kept fresh by `mise run examples` |

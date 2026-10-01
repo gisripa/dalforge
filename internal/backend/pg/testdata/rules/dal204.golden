@@ -1,0 +1,5 @@
+dal204.proto:10:1: error DAL204: table name (defaulted from the message name; set (dal.v1.table).name) "order" is a reserved SQL keyword
+dal204.proto:14:3: error DAL204: column name "select" is a reserved SQL keyword
+dal204.proto:15:3: error DAL204: column name "UserId" must be lowercase letters, digits and underscores, starting with a letter or underscore
+dal204.proto:17:3: error DAL204: column name "a_column_name_that_is_far_too_long_for_postgres_identifiers_xyzw" is 64 bytes; Postgres silently truncates names to 63
+dal204.proto:22:1: error DAL204: index name "Shipments-By-Order" must be lowercase letters, digits and underscores, starting with a letter or underscore
