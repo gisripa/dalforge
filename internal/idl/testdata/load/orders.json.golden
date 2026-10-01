@@ -7,6 +7,7 @@
         "table_source": "declared",
         "fields": [
           {
+            "name": "id",
             "column": "id",
             "number": 1,
             "kind": "string",
@@ -20,6 +21,7 @@
             }
           },
           {
+            "name": "account_id",
             "column": "account_id",
             "number": 2,
             "kind": "string",
@@ -32,6 +34,7 @@
             }
           },
           {
+            "name": "status",
             "column": "status",
             "number": 3,
             "kind": "string",
@@ -43,6 +46,7 @@
             }
           },
           {
+            "name": "note",
             "column": "note",
             "number": 4,
             "kind": "string",
@@ -55,6 +59,7 @@
             }
           },
           {
+            "name": "version",
             "column": "version",
             "number": 5,
             "kind": "int64",
@@ -67,6 +72,7 @@
             }
           },
           {
+            "name": "created_at",
             "column": "created_at",
             "number": 6,
             "kind": "timestamp",
@@ -79,6 +85,7 @@
             }
           },
           {
+            "name": "updated_at",
             "column": "updated_at",
             "number": 7,
             "kind": "timestamp",
@@ -91,6 +98,7 @@
             }
           },
           {
+            "name": "deleted_at",
             "column": "deleted_at",
             "number": 8,
             "kind": "timestamp",
@@ -203,9 +211,9 @@
                   "account_id"
                 ],
                 "order_by": {
-                  "columns": [
+                  "keys": [
                     {
-                      "column": "created_at",
+                      "field": "created_at",
                       "desc": true
                     }
                   ],

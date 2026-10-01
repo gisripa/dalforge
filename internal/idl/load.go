@@ -222,6 +222,7 @@ func (l *loader) field(fd protoreflect.FieldDescriptor) *ir.Field {
 	}
 	opts := get[*dalv1.Field](l, fd, dalv1.E_Field)
 	f := &ir.Field{
+		Name:       string(fd.Name()),
 		Column:     opts.GetName(),
 		Number:     int32(fd.Number()),
 		Kind:       kind,
@@ -235,7 +236,7 @@ func (l *loader) field(fd protoreflect.FieldDescriptor) *ir.Field {
 		Pos:        pos(fd),
 	}
 	if f.Column == "" {
-		f.Column = string(fd.Name())
+		f.Column = f.Name
 	}
 	if kind == ir.KindEnum {
 		f.Enum = enum(fd.Enum())
@@ -366,7 +367,7 @@ func (l *loader) query(md protoreflect.MethodDescriptor, e *ir.Entity) *ir.Query
 	switch k := q.GetKind().(type) {
 	case *dalv1.Query_Get:
 		spec = &ir.Get{
-			By:          columnsOr(k.Get.GetBy(), e.PrimaryKey()),
+			By:          refsOr(k.Get.GetBy(), e.PrimaryKey()),
 			Consistency: consistency(k.Get.GetConsistency()),
 		}
 	case *dalv1.Query_List:
@@ -374,13 +375,13 @@ func (l *loader) query(md protoreflect.MethodDescriptor, e *ir.Entity) *ir.Query
 	case *dalv1.Query_Create:
 		spec = &ir.Create{}
 	case *dalv1.Query_Update:
-		spec = &ir.Update{Columns: columnsOr(k.Update.GetColumns(), writable(e))}
+		spec = &ir.Update{Columns: refsOr(k.Update.GetColumns(), writable(e))}
 	case *dalv1.Query_Delete:
 		spec = &ir.Delete{}
 	case *dalv1.Query_Upsert:
 		spec = &ir.Upsert{
-			ConflictOn: columnsOr(k.Upsert.GetConflictOn(), e.PrimaryKey()),
-			Columns:    columnsOr(k.Upsert.GetColumns(), writable(e)),
+			ConflictOn: refsOr(k.Upsert.GetConflictOn(), e.PrimaryKey()),
+			Columns:    refsOr(k.Upsert.GetColumns(), writable(e)),
 		}
 	default:
 		l.errorf(md, "rpc %s: (dal.v1.query) sets no access pattern; set one of get, list, create, update, delete, upsert", md.Name())
@@ -408,35 +409,35 @@ func (l *loader) list(md protoreflect.MethodDescriptor, list *dalv1.List, e *ir.
 	}
 	switch {
 	case len(list.GetOrderBy()) > 0:
-		cols, ok := l.sortColumns(md, list.GetOrderBy())
+		cols, ok := l.sortKeys(md, list.GetOrderBy())
 		if !ok {
 			return nil
 		}
-		s.OrderBy = ir.Sort{Columns: cols, Source: ir.SourceDeclared}
+		s.OrderBy = ir.Sort{Keys: cols, Source: ir.SourceDeclared}
 	case s.Range != "":
-		// A range implies sorting by the range column (design §5).
-		s.OrderBy = ir.Sort{Columns: []ir.SortColumn{{Column: s.Range}}, Source: ir.SourceDefaulted}
+		// A range implies sorting by the range field (design §5).
+		s.OrderBy = ir.Sort{Keys: []ir.SortKey{{Field: s.Range}}, Source: ir.SourceDefaulted}
 	default:
-		// No order_by and no range: the primary key, minus columns the
+		// No order_by and no range: the primary key, minus fields the
 		// equality filters already pin (sorting by them is a no-op), e.g.
 		// eq [tenant_id] on key (tenant_id, id) sorts by id. A backend pass
 		// may replace this with a sort inherited from an explicit index.
-		cols := []ir.SortColumn{}
-		for _, c := range e.PrimaryKey() {
-			if !slices.Contains(s.Eq, c) {
-				cols = append(cols, ir.SortColumn{Column: c})
+		keys := []ir.SortKey{}
+		for _, name := range e.PrimaryKey() {
+			if !slices.Contains(s.Eq, name) {
+				keys = append(keys, ir.SortKey{Field: name})
 			}
 		}
-		s.OrderBy = ir.Sort{Columns: cols, Source: ir.SourceDefaulted}
+		s.OrderBy = ir.Sort{Keys: keys, Source: ir.SourceDefaulted}
 	}
 	return s
 }
 
-// sortColumns parses entries like "created_at" or "created_at DESC".
-func (l *loader) sortColumns(d protoreflect.Descriptor, entries []string) ([]ir.SortColumn, bool) {
-	cols := make([]ir.SortColumn, 0, len(entries))
+// sortKeys parses entries like "created_at" or "created_at DESC".
+func (l *loader) sortKeys(d protoreflect.Descriptor, entries []string) ([]ir.SortKey, bool) {
+	cols := make([]ir.SortKey, 0, len(entries))
 	for _, entry := range entries {
-		c, err := parseSortColumn(entry)
+		c, err := parseSortKey(entry)
 		if err != nil {
 			l.errorf(d, "%v", err)
 			return nil, false
@@ -446,39 +447,39 @@ func (l *loader) sortColumns(d protoreflect.Descriptor, entries []string) ([]ir.
 	return cols, true
 }
 
-func parseSortColumn(s string) (ir.SortColumn, error) {
+func parseSortKey(s string) (ir.SortKey, error) {
 	parts := strings.Fields(s)
 	switch {
 	case len(parts) == 1:
-		return ir.SortColumn{Column: parts[0]}, nil
+		return ir.SortKey{Field: parts[0]}, nil
 	case len(parts) == 2 && strings.EqualFold(parts[1], "ASC"):
-		return ir.SortColumn{Column: parts[0]}, nil
+		return ir.SortKey{Field: parts[0]}, nil
 	case len(parts) == 2 && strings.EqualFold(parts[1], "DESC"):
-		return ir.SortColumn{Column: parts[0], Desc: true}, nil
+		return ir.SortKey{Field: parts[0], Desc: true}, nil
 	default:
-		return ir.SortColumn{}, fmt.Errorf("invalid sort %q: want \"column\" or \"column ASC|DESC\"", s)
+		return ir.SortKey{}, fmt.Errorf("invalid sort %q: want \"field\" or \"field ASC|DESC\"", s)
 	}
 }
 
-// columnsOr returns the declared columns, or the default when none are
+// refsOr returns the declared field names, or the default when none are
 // declared.
-func columnsOr(declared, def []string) ir.Columns {
+func refsOr(declared, def []string) ir.FieldRefs {
 	if len(declared) > 0 {
-		return ir.Columns{Names: declared, Source: ir.SourceDeclared}
+		return ir.FieldRefs{Names: declared, Source: ir.SourceDeclared}
 	}
-	return ir.Columns{Names: def, Source: ir.SourceDefaulted}
+	return ir.FieldRefs{Names: def, Source: ir.SourceDefaulted}
 }
 
-// writable is the default column set of Update and Upsert: active columns
-// that are neither key columns nor managed by a role.
+// writable is the default field set of Update and Upsert: active fields that
+// are neither key fields nor managed by a role.
 func writable(e *ir.Entity) []string {
-	var cols []string
+	var names []string
 	for _, f := range e.Fields {
 		if !f.PrimaryKey && f.Role == ir.RoleNone && f.State == ir.StateActive {
-			cols = append(cols, f.Column)
+			names = append(names, f.Name)
 		}
 	}
-	return cols
+	return names
 }
 
 // shape describes an rpc request or response. An entity message is referred
@@ -540,7 +541,7 @@ func (l *loader) pgTable(md protoreflect.MessageDescriptor, e *ir.Entity) {
 	if o := get[*pgv1.Table](l, md, pgv1.E_Table); o != nil {
 		ensure().IndexBudget = o.GetIndexBudget()
 		for _, idx := range o.GetIndexes() {
-			cols, ok := l.sortColumns(md, idx.GetColumns())
+			cols, ok := l.sortKeys(md, idx.GetColumns())
 			if !ok {
 				continue
 			}

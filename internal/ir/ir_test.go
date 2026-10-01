@@ -10,20 +10,20 @@ func testEntity() *Entity {
 	return &Entity{
 		FullName: "shop.v1.Item",
 		Fields: []*Field{
-			{Column: "tenant_id", PrimaryKey: true},
-			{Column: "name"},
-			{Column: "id", PrimaryKey: true},
+			{Name: "tenant_id", Column: "tenant_id", PrimaryKey: true},
+			{Name: "display_name", Column: "name"},
+			{Name: "id", Column: "id", PrimaryKey: true},
 		},
 	}
 }
 
 func TestEntityLookups(t *testing.T) {
 	e := testEntity()
-	if got := e.Column("name"); got == nil || got.Column != "name" {
-		t.Errorf("Column(name) = %v, want the name field", got)
+	if got := e.Field("display_name"); got == nil || got.Column != "name" {
+		t.Errorf("Field(display_name) = %v, want the field stored in column name", got)
 	}
-	if got := e.Column("missing"); got != nil {
-		t.Errorf("Column(missing) = %v, want nil", got)
+	if got := e.Field("name"); got != nil {
+		t.Errorf("Field(name) = %v, want nil: lookups use proto field names, not columns", got)
 	}
 	if got := strings.Join(e.PrimaryKey(), ","); got != "tenant_id,id" {
 		t.Errorf("PrimaryKey() = %q, want declaration order tenant_id,id", got)
@@ -70,14 +70,14 @@ func TestQueryJSON(t *testing.T) {
 		Method: "ListByAccount",
 		Spec: &List{
 			Eq:      []string{"account_id"},
-			OrderBy: Sort{Columns: []SortColumn{{Column: "created_at", Desc: true}}, Source: SourceDeclared},
+			OrderBy: Sort{Keys: []SortKey{{Field: "created_at", Desc: true}}, Source: SourceDeclared},
 		},
 	}
 	b, err := json.Marshal(q)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `"spec":{"list":{"eq":["account_id"],"order_by":{"columns":[{"column":"created_at","desc":true}],"source":"declared"},"consistency":"eventual"}}`
+	want := `"spec":{"list":{"eq":["account_id"],"order_by":{"keys":[{"field":"created_at","desc":true}],"source":"declared"},"consistency":"eventual"}}`
 	if !strings.Contains(string(b), want) {
 		t.Errorf("json = %s\nwant it to contain %s", b, want)
 	}

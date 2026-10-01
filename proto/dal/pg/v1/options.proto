@@ -58,11 +58,12 @@ message Index {
   // Index name. Defaults to <table>_<col>_<col>_idx.
   string name = 1;
 
-  // Key columns in order, each optionally suffixed with ASC or DESC, e.g.
+  // Key fields (proto field names) in order, each optionally suffixed with
+  // ASC or DESC, e.g.
   // ["account_id", "created_at DESC"].
   repeated string columns = 2;
 
-  // Non-key columns stored in the index (INCLUDE) for index-only scans.
+  // Non-key fields stored in the index (INCLUDE) for index-only scans.
   repeated string include = 3;
 
   // Predicate for a partial index, as a SQL boolean expression.

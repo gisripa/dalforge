@@ -162,7 +162,7 @@ message A { option (dal.v1.table) = {}; optional string id = 1 [(dal.v1.field).p
 	}
 }
 
-func TestParseSortColumn(t *testing.T) {
+func TestParseSortKey(t *testing.T) {
 	tests := []struct {
 		in       string
 		wantCol  string
@@ -179,12 +179,12 @@ func TestParseSortColumn(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			got, err := parseSortColumn(tt.in)
+			got, err := parseSortKey(tt.in)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("parseSortColumn(%q) error = %v, wantErr %v", tt.in, err, tt.wantErr)
+				t.Fatalf("parseSortKey(%q) error = %v, wantErr %v", tt.in, err, tt.wantErr)
 			}
-			if got.Column != tt.wantCol || got.Desc != tt.wantDesc {
-				t.Errorf("parseSortColumn(%q) = %+v, want {%s %v}", tt.in, got, tt.wantCol, tt.wantDesc)
+			if got.Field != tt.wantCol || got.Desc != tt.wantDesc {
+				t.Errorf("parseSortKey(%q) = %+v, want {%s %v}", tt.in, got, tt.wantCol, tt.wantDesc)
 			}
 		})
 	}

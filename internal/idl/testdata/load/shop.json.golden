@@ -7,6 +7,7 @@
         "table_source": "declared",
         "fields": [
           {
+            "name": "id",
             "column": "id",
             "number": 1,
             "kind": "string",
@@ -20,6 +21,7 @@
             }
           },
           {
+            "name": "name",
             "column": "name",
             "number": 2,
             "kind": "string",

@@ -4,9 +4,12 @@
 //
 // The loader applies defaults that need nothing beyond the core IDL, such as
 // Get by primary key, and marks each defaulted value with a Source so lint can
-// tell an explicit choice from a fallback. Column references are column-name
-// strings; Entity.Column resolves them, and validation guarantees they
-// resolve before any emitter runs.
+// tell an explicit choice from a fallback.
+//
+// References (eq, order_by, by, shard_key, ...) are proto field names, the
+// user's source of truth. A field's Column is only its physical SQL name.
+// Entity.Field resolves references, and validation guarantees they resolve
+// before any emitter runs.
 package ir
 
 import "fmt"
@@ -44,27 +47,27 @@ type Entity struct {
 	Table       string   `json:"table"`
 	TableSource Source   `json:"table_source"`
 	Fields      []*Field `json:"fields"`              // declaration order
-	ShardKey    []string `json:"shard_key,omitempty"` // column names
+	ShardKey    []string `json:"shard_key,omitempty"` // field names
 	Reserved    Reserved `json:"reserved"`
 	Pos         Pos      `json:"pos"`
 }
 
-// Column returns the field stored in the named column, or nil.
-func (e *Entity) Column(name string) *Field {
+// Field returns the field with the given proto field name, or nil.
+func (e *Entity) Field(name string) *Field {
 	for _, f := range e.Fields {
-		if f.Column == name {
+		if f.Name == name {
 			return f
 		}
 	}
 	return nil
 }
 
-// PrimaryKey returns the primary-key column names in declaration order.
+// PrimaryKey returns the primary-key field names in declaration order.
 func (e *Entity) PrimaryKey() []string {
 	var pk []string
 	for _, f := range e.Fields {
 		if f.PrimaryKey {
-			pk = append(pk, f.Column)
+			pk = append(pk, f.Name)
 		}
 	}
 	return pk
@@ -79,7 +82,8 @@ type Reserved struct {
 
 // Field is a column of an entity.
 type Field struct {
-	Column     string `json:"column"`
+	Name       string `json:"name"`   // proto field name: what references and Go code use
+	Column     string `json:"column"` // SQL column name; defaults to Name
 	Number     int32  `json:"number"` // the column's identity across releases
 	Kind       Kind   `json:"kind"`
 	Format     Format `json:"format,omitempty"`
@@ -136,20 +140,20 @@ type MessageField struct {
 	Enum     string `json:"enum,omitempty"`    // full name, when Kind is KindEnum
 }
 
-// Columns is a set of column names and where it came from.
-type Columns struct {
+// FieldRefs is a list of field names and where it came from.
+type FieldRefs struct {
 	Names  []string `json:"names"`
 	Source Source   `json:"source"`
 }
 
-// Sort is an ordered list of sort columns and where it came from.
+// Sort is an ordered list of sort keys and where it came from.
 type Sort struct {
-	Columns []SortColumn `json:"columns"`
-	Source  Source       `json:"source"`
+	Keys   []SortKey `json:"keys"`
+	Source Source    `json:"source"`
 }
 
-// SortColumn is one column of a sort order.
-type SortColumn struct {
-	Column string `json:"column"`
-	Desc   bool   `json:"desc,omitempty"`
+// SortKey is one field of a sort order.
+type SortKey struct {
+	Field string `json:"field"`
+	Desc  bool   `json:"desc,omitempty"`
 }

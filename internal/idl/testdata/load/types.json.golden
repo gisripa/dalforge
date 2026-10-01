@@ -7,6 +7,7 @@
         "table_source": "defaulted",
         "fields": [
           {
+            "name": "id",
             "column": "id",
             "number": 1,
             "kind": "int64",
@@ -19,6 +20,7 @@
             }
           },
           {
+            "name": "ok",
             "column": "ok",
             "number": 2,
             "kind": "bool",
@@ -30,6 +32,7 @@
             }
           },
           {
+            "name": "i32",
             "column": "i32",
             "number": 3,
             "kind": "int32",
@@ -41,6 +44,7 @@
             }
           },
           {
+            "name": "s32",
             "column": "s32",
             "number": 4,
             "kind": "int32",
@@ -52,6 +56,7 @@
             }
           },
           {
+            "name": "sf32",
             "column": "sf32",
             "number": 5,
             "kind": "int32",
@@ -63,6 +68,7 @@
             }
           },
           {
+            "name": "i64",
             "column": "i64",
             "number": 6,
             "kind": "int64",
@@ -74,6 +80,7 @@
             }
           },
           {
+            "name": "s64",
             "column": "s64",
             "number": 7,
             "kind": "int64",
@@ -85,6 +92,7 @@
             }
           },
           {
+            "name": "sf64",
             "column": "sf64",
             "number": 8,
             "kind": "int64",
@@ -96,6 +104,7 @@
             }
           },
           {
+            "name": "u32",
             "column": "u32",
             "number": 9,
             "kind": "uint32",
@@ -107,6 +116,7 @@
             }
           },
           {
+            "name": "f32",
             "column": "f32",
             "number": 10,
             "kind": "uint32",
@@ -118,6 +128,7 @@
             }
           },
           {
+            "name": "u64",
             "column": "u64",
             "number": 11,
             "kind": "uint64",
@@ -129,6 +140,7 @@
             }
           },
           {
+            "name": "f64",
             "column": "f64",
             "number": 12,
             "kind": "uint64",
@@ -140,6 +152,7 @@
             }
           },
           {
+            "name": "fl",
             "column": "fl",
             "number": 13,
             "kind": "float",
@@ -151,6 +164,7 @@
             }
           },
           {
+            "name": "db",
             "column": "db",
             "number": 14,
             "kind": "double",
@@ -162,6 +176,7 @@
             }
           },
           {
+            "name": "path",
             "column": "path",
             "number": 15,
             "kind": "string",
@@ -173,6 +188,7 @@
             }
           },
           {
+            "name": "body",
             "column": "body",
             "number": 16,
             "kind": "bytes",
@@ -184,6 +200,7 @@
             }
           },
           {
+            "name": "color",
             "column": "color",
             "number": 17,
             "kind": "enum",
@@ -203,6 +220,7 @@
             }
           },
           {
+            "name": "created_at",
             "column": "created_at",
             "number": 18,
             "kind": "timestamp",
@@ -214,6 +232,7 @@
             }
           },
           {
+            "name": "finished_at",
             "column": "finished_at",
             "number": 19,
             "kind": "timestamp",
@@ -226,6 +245,7 @@
             }
           },
           {
+            "name": "note",
             "column": "note",
             "number": 20,
             "kind": "string",
@@ -238,6 +258,7 @@
             }
           },
           {
+            "name": "tags",
             "column": "tags",
             "number": 21,
             "kind": "string",
@@ -250,6 +271,7 @@
             }
           },
           {
+            "name": "headers",
             "column": "headers",
             "number": 22,
             "kind": "json",
@@ -261,6 +283,7 @@
             }
           },
           {
+            "name": "meta",
             "column": "meta",
             "number": 23,
             "kind": "json",
@@ -272,6 +295,7 @@
             }
           },
           {
+            "name": "nested",
             "column": "nested",
             "number": 24,
             "kind": "json",
@@ -283,6 +307,7 @@
             }
           },
           {
+            "name": "nested_list",
             "column": "nested_list",
             "number": 25,
             "kind": "json",
@@ -295,6 +320,7 @@
             }
           },
           {
+            "name": "status",
             "column": "status",
             "number": 26,
             "kind": "int32",
@@ -306,6 +332,7 @@
             }
           },
           {
+            "name": "request_id",
             "column": "req_id",
             "number": 27,
             "kind": "string",
@@ -319,6 +346,7 @@
             }
           },
           {
+            "name": "amount",
             "column": "amount",
             "number": 28,
             "kind": "string",
@@ -331,6 +359,7 @@
             }
           },
           {
+            "name": "payload",
             "column": "payload",
             "number": 29,
             "kind": "string",
@@ -343,6 +372,7 @@
             }
           },
           {
+            "name": "embedding",
             "column": "embedding",
             "number": 30,
             "kind": "string",
@@ -354,6 +384,7 @@
             }
           },
           {
+            "name": "old_status",
             "column": "old_status",
             "number": 31,
             "kind": "string",
@@ -365,6 +396,7 @@
             }
           },
           {
+            "name": "ratio",
             "column": "ratio",
             "number": 32,
             "kind": "double",
@@ -416,10 +448,10 @@
             "name": "logs_by_path",
             "columns": [
               {
-                "column": "path"
+                "field": "path"
               },
               {
-                "column": "created_at",
+                "field": "created_at",
                 "desc": true
               }
             ],

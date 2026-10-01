@@ -10,6 +10,10 @@
 // noted: the defaults are meant to be the performant choice, and options exist
 // only to configure away from them.
 //
+// Every reference to a field in these options (shard_key, by, eq, range,
+// order_by, columns, conflict_on) uses the proto field name, never the SQL
+// column name set with (dal.v1.field).name.
+//
 // See docs/design.md for semantics, defaults and lint rules.
 syntax = "proto3";
 
@@ -43,7 +47,7 @@ message Table {
   // Table name. Defaults to the snake_case message name.
   string name = 1;
 
-  // Columns the data is sharded by. Recorded and validated (the columns must
+  // Fields the data is sharded by. Recorded and validated (the fields must
   // exist and be active); routing and enforcement are out of scope for now.
   repeated string shard_key = 2;
 }
@@ -138,8 +142,8 @@ enum Consistency {
 
 // Get fetches at most one row by a unique key.
 message Get {
-  // Lookup columns. Defaults to the primary key. Any other set must be
-  // covered by a unique column or unique index.
+  // Lookup fields. Defaults to the primary key. Any other set must be
+  // covered by a unique field or unique index.
   repeated string by = 1;
 
   Consistency consistency = 2;
@@ -148,14 +152,14 @@ message Get {
 // List pages through rows matching equality filters, using keyset
 // pagination: the access path is (eq..., order_by..., primary key).
 message List {
-  // Equality filter columns.
+  // Equality filter fields.
   repeated string eq = 1;
 
-  // Optional range filter column. It must be the leading order_by column.
+  // Optional range filter field. It must be the leading order_by field.
   string range = 2;
 
-  // Sort columns, each optionally suffixed with ASC or DESC. When empty, the
-  // sort is inherited from a backend-declared index whose leading columns are
+  // Sort fields, each optionally suffixed with ASC or DESC. When empty, the
+  // sort is inherited from a backend-declared index whose leading fields are
   // exactly eq; failing that, it is the primary key. The primary key is
   // always appended as the keyset tie-breaker.
   repeated string order_by = 3;
@@ -173,7 +177,7 @@ message Create {}
 // Update modifies one row by primary key. When the entity has a ROLE_VERSION
 // column the update is a compare-and-swap on it.
 message Update {
-  // Columns the update may set. Defaults to every non-key column that is not
+  // Fields the update may set. Defaults to every non-key field that is not
   // managed by a Role.
   repeated string columns = 1;
 }
@@ -184,10 +188,10 @@ message Delete {}
 
 // Upsert inserts one row, or updates it on conflict.
 message Upsert {
-  // Conflict target columns. Defaults to the primary key; any other set must
-  // be covered by a unique column or unique index.
+  // Conflict target fields. Defaults to the primary key; any other set must
+  // be covered by a unique field or unique index.
   repeated string conflict_on = 1;
 
-  // Columns updated on conflict. Defaults to the same set as Update.columns.
+  // Fields updated on conflict. Defaults to the same set as Update.columns.
   repeated string columns = 2;
 }

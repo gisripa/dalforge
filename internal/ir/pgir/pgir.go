@@ -43,11 +43,11 @@ func (t *Table) Column(number int32) *Column {
 
 // Index is an explicitly declared index.
 type Index struct {
-	Name    string          `json:"name,omitempty"`
-	Columns []ir.SortColumn `json:"columns"`
-	Include []string        `json:"include,omitempty"`
-	Where   string          `json:"where,omitempty"`
-	Unique  bool            `json:"unique,omitempty"`
+	Name    string       `json:"name,omitempty"`
+	Columns []ir.SortKey `json:"columns"` // proto field names, like all IDL references
+	Include []string     `json:"include,omitempty"`
+	Where   string       `json:"where,omitempty"`
+	Unique  bool         `json:"unique,omitempty"`
 }
 
 // Column holds a column's Postgres hints. An empty Type and CustomType mean

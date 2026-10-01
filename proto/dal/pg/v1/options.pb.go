@@ -244,10 +244,11 @@ type Index struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Index name. Defaults to <table>_<col>_<col>_idx.
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	// Key columns in order, each optionally suffixed with ASC or DESC, e.g.
+	// Key fields (proto field names) in order, each optionally suffixed with
+	// ASC or DESC, e.g.
 	// ["account_id", "created_at DESC"].
 	Columns []string `protobuf:"bytes,2,rep,name=columns,proto3" json:"columns,omitempty"`
-	// Non-key columns stored in the index (INCLUDE) for index-only scans.
+	// Non-key fields stored in the index (INCLUDE) for index-only scans.
 	Include []string `protobuf:"bytes,3,rep,name=include,proto3" json:"include,omitempty"`
 	// Predicate for a partial index, as a SQL boolean expression.
 	Where         string `protobuf:"bytes,4,opt,name=where,proto3" json:"where,omitempty"`

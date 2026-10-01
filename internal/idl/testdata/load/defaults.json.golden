@@ -7,6 +7,7 @@
         "table_source": "defaulted",
         "fields": [
           {
+            "name": "tenant_id",
             "column": "tenant_id",
             "number": 1,
             "kind": "string",
@@ -20,6 +21,7 @@
             }
           },
           {
+            "name": "id",
             "column": "id",
             "number": 2,
             "kind": "string",
@@ -33,6 +35,7 @@
             }
           },
           {
+            "name": "sku",
             "column": "sku",
             "number": 3,
             "kind": "string",
@@ -45,6 +48,7 @@
             }
           },
           {
+            "name": "name",
             "column": "name",
             "number": 4,
             "kind": "string",
@@ -56,6 +60,7 @@
             }
           },
           {
+            "name": "color",
             "column": "color",
             "number": 5,
             "kind": "string",
@@ -68,6 +73,7 @@
             }
           },
           {
+            "name": "legacy_code",
             "column": "legacy_code",
             "number": 6,
             "kind": "string",
@@ -79,6 +85,7 @@
             }
           },
           {
+            "name": "version",
             "column": "version",
             "number": 7,
             "kind": "int64",
@@ -91,6 +98,7 @@
             }
           },
           {
+            "name": "created_at",
             "column": "created_at",
             "number": 8,
             "kind": "timestamp",
@@ -103,6 +111,7 @@
             }
           },
           {
+            "name": "updated_at",
             "column": "updated_at",
             "number": 9,
             "kind": "timestamp",
@@ -115,6 +124,7 @@
             }
           },
           {
+            "name": "deleted_at",
             "column": "deleted_at",
             "number": 10,
             "kind": "timestamp",
@@ -263,9 +273,9 @@
                   "tenant_id"
                 ],
                 "order_by": {
-                  "columns": [
+                  "keys": [
                     {
-                      "column": "id"
+                      "field": "id"
                     }
                   ],
                   "source": "defaulted"
@@ -335,9 +345,9 @@
                 ],
                 "range": "created_at",
                 "order_by": {
-                  "columns": [
+                  "keys": [
                     {
-                      "column": "created_at"
+                      "field": "created_at"
                     }
                   ],
                   "source": "defaulted"
@@ -397,13 +407,13 @@
                   "tenant_id"
                 ],
                 "order_by": {
-                  "columns": [
+                  "keys": [
                     {
-                      "column": "created_at",
+                      "field": "created_at",
                       "desc": true
                     },
                     {
-                      "column": "id"
+                      "field": "id"
                     }
                   ],
                   "source": "declared"

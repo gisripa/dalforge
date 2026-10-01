@@ -15,7 +15,7 @@ type Spec interface {
 
 // Get fetches at most one row by a unique key.
 type Get struct {
-	By          Columns     `json:"by"` // defaults to the primary key
+	By          FieldRefs   `json:"by"` // defaults to the primary key
 	Consistency Consistency `json:"consistency"`
 }
 
@@ -23,7 +23,7 @@ type Get struct {
 type List struct {
 	Eq      []string `json:"eq,omitempty"`
 	Range   string   `json:"range,omitempty"`
-	OrderBy Sort     `json:"order_by"` // defaults to the range column, else the primary key
+	OrderBy Sort     `json:"order_by"` // defaults to the range field, else the primary key minus eq
 	// Page sizes; zero means the project default.
 	DefaultPageSize uint32      `json:"default_page_size,omitempty"`
 	MaxPageSize     uint32      `json:"max_page_size,omitempty"`
@@ -35,7 +35,7 @@ type Create struct{}
 
 // Update modifies one row by primary key.
 type Update struct {
-	Columns Columns `json:"columns"` // defaults to active, non-key, role-free columns
+	Columns FieldRefs `json:"columns"` // defaults to active, non-key, role-free fields
 }
 
 // Delete removes one row by primary key.
@@ -43,8 +43,8 @@ type Delete struct{}
 
 // Upsert inserts one row, or updates it on conflict.
 type Upsert struct {
-	ConflictOn Columns `json:"conflict_on"` // defaults to the primary key
-	Columns    Columns `json:"columns"`     // defaults like Update.Columns
+	ConflictOn FieldRefs `json:"conflict_on"` // defaults to the primary key
+	Columns    FieldRefs `json:"columns"`     // defaults like Update.Columns
 }
 
 // Kind implements Spec.
