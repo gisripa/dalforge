@@ -72,8 +72,20 @@ backend is built for now (§3).
   generation time. Being a CLI rather than a protoc plugin lets it read and
   write state on disk, namely the schema snapshot that migration diffing
   depends on. A buf plugin mode can be added later over the same core.
-- **The options protos ship inside the binary**, so users can
-  `import "dal/v1/options.proto"` without vendoring it. Their Go bindings sit
+- **The options ship inside the binary**, so users can
+  `import "dal/v1/options.proto"` without vendoring it. The resolver
+  (`internal/idl.NewResolver`) serves these imports from the compiled
+  descriptors in the Go bindings rather than from embedded source, so there's
+  no second copy to drift. Lookup order:
+  1. the bundled options, which always win, so a stale vendored copy on an
+     import path is never compiled in (DAL116 reports such copies);
+  2. the user's import paths;
+  3. the protobuf well-known types.
+
+  protocompile decodes custom option values as `dynamicpb` messages, so the
+  loader re-decodes options against the registered Go types to get typed
+  `*dalv1.Table` and friends. If a command later needs to export the protos
+  for editors or buf, that's when embedding the source becomes worthwhile. Their Go bindings sit
   next to them (`github.com/gisripa/dalforge/proto/dal/v1`, package `dalv1`;
   `…/proto/dal/pg/v1`, package `pgv1`). Users who run protoc-gen-go on their
   own IDL can import them, so they're public, not `internal/`. They can also be
@@ -87,6 +99,11 @@ backend is built for now (§3).
 - **The core IR is the contract between stages.** Lint rules and emitters only
   see the IR, never the descriptors. That makes both testable with plain Go
   values.
+- **Protobuf stops at the loader.** protocompile, the `dalv1`/`pgv1`
+  bindings and option decoding are used only to read the IDL. The IR is plain
+  Go, and so is everything generated from it. The generated code imports the
+  standard library, pgx, uuid, the sqlc output and the `dal` runtime, never
+  `google.golang.org/protobuf`. A `go list -deps` test enforces this.
 
 ### Reproducible generation: `dalforge.lock`
 

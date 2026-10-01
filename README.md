@@ -43,7 +43,7 @@ mise run check:all                # check + integration (what CI runs)
 ```
 cmd/dalforge/       CLI entrypoint
 internal/cli/       subcommand dispatch
-internal/idl/       IDL loading (currently a smoke test for the options proto)
+internal/idl/       IDL loading: resolver serving the bundled options, typed option decoding
 internal/golden/    golden-file assertions for generator output
 internal/pgtest/    per-test Postgres databases for integration tests
 internal/integration/ end-to-end tests (build tag `integration`)
