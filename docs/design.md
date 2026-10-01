@@ -892,7 +892,7 @@ The generated `sqlc.yaml` turns on sqlc's safety features:
 | Suite | Where | Runs with | Needs |
 |---|---|---|---|
 | Unit | `*_test.go` next to the code | `mise run test` (part of `mise run check`) | nothing |
-| Golden | unit tests comparing emitter output with `testdata/*.golden`; `-update` rewrites them | `mise run test` | nothing |
+| Golden | unit tests comparing generator output with `testdata/**/*.golden` via `internal/golden` (`Assert` for one file, `AssertDir` for a generated file set, including stale-file detection) | `mise run test`; `mise run test:update` rewrites them (`DALFORGE_UPDATE_GOLDEN=1`, refused when `CI` is set) | nothing |
 | Integration | `//go:build integration` files next to the code they cover, plus end-to-end suites in `internal/integration/` | `mise run test:integration` (runs `vm:up` and `db:up` first) | nothing beyond mise (Colima locally, native Docker in CI) |
 | Examples | `examples/orders` regenerated and diffed | `mise run examples` (part of `mise run check`) | nothing |
 

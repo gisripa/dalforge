@@ -46,6 +46,11 @@ done
 description = "Run unit tests with the race detector"
 run = "go test -race -count=1 ./..."
 
+[tasks."test:update"]
+description = "Rewrite golden files from current output (review the diff afterwards)"
+env = { DALFORGE_UPDATE_GOLDEN = "1" }
+run = "go test -count=1 ./..."
+
 [tasks."test:integration"]
 description = "Run integration tests against the compose Postgres (needs Docker)"
 depends = ["db:up"]

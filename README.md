@@ -26,6 +26,7 @@ exec $SHELL   # reload your shell
 mise tasks                        # list everything
 mise run dalforge -- -h           # run the CLI
 mise run test
+mise run test:update               # accept new generator output into testdata/*.golden (review the diff)
 mise run lint
 mise run fmt
 mise run build                    # -> ./bin/dalforge
@@ -43,6 +44,7 @@ mise run check:all                # check + integration (what CI runs)
 cmd/dalforge/       CLI entrypoint
 internal/cli/       subcommand dispatch
 internal/idl/       IDL loading (currently a smoke test for the options proto)
+internal/golden/    golden-file assertions for generator output
 internal/pgtest/    per-test Postgres databases for integration tests
 internal/integration/ end-to-end tests (build tag `integration`)
 compose.yaml        local postgres:16.9 for integration tests and examples
