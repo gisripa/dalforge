@@ -182,3 +182,18 @@ func TestStrings(t *testing.T) {
 		}
 	}
 }
+
+func TestOpContext(t *testing.T) {
+	if _, _, ok := OpFromContext(context.Background()); ok {
+		t.Error("empty context must carry no op")
+	}
+	ctx := WithOp(context.Background(), _readOp, 2)
+	op, attempt, ok := OpFromContext(ctx)
+	if !ok || op != _readOp || attempt != 2 {
+		t.Errorf("OpFromContext = %v, %d, %v; want %v, 2, true", op, attempt, ok, _readOp)
+	}
+	op, attempt, _ = OpFromContext(WithOp(ctx, _createOp, 1)) // innermost wins
+	if op != _createOp || attempt != 1 {
+		t.Errorf("nested WithOp = %v, %d; want %v, 1", op, attempt, _createOp)
+	}
+}

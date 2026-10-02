@@ -800,7 +800,7 @@ type OrderRepository interface {
 	OrderWriteRepository
 }
 
-func NewOrderRepository(db dalpg.DB, opts ...dalpg.Option) OrderRepository
+func NewOrderRepository(run *dalpg.Runner) OrderRepository // pools stay at the composition root
 
 // WithTx runs fn in a transaction on the writer pool. Tx is the DAL's own
 // type, never pgx.Tx.
@@ -915,6 +915,24 @@ never mix. Custom queries land on the same sqlc `Queries` and can join a
   - Every failure becomes a classified `*dal.Error` before the retrier sees
     it. `fn` receives a `dalpg.DBTX`, which has the same method set as sqlc's,
     so `sqlcdb.New(q)` works on a pool or a transaction alike.
+  - **Pools are an interface you can wrap.** `dalpg.DB{Reader, Writer}`
+    takes `dalpg.Pool` (the sqlc-compatible `DBTX` plus `Begin`), which
+    `*pgxpool.Pool` satisfies, and resolves it on every operation. A wrapper
+    can therefore swap the underlying pool at runtime without touching
+    generated code: an Aurora blue/green switchover, tracing, or per-tenant
+    pools. In-flight transactions finish on the connection they began on.
+    Detecting the switchover is the wrapper's job, not dalforge's.
+  - **Observability with no wrappers.** Every attempt runs with a context
+    carrying the `dal.Op` and the attempt number (`dal.OpFromContext`). The
+    Runner counts attempts itself, so this holds for any retrier.
+    - Inside `InTx`, statements carry their own op and the transaction's
+      attempt; BEGIN, COMMIT and ROLLBACK carry the transaction's op.
+    - pgx tracers (`ConnConfig.Tracer`, set on the pool at the composition
+      root) therefore label spans and metrics by repository method and tell
+      retries apart. sqlc's `-- name:` comment in each statement also names
+      the query.
+    - Generated code does nothing for this, and no proxy closures around
+      repository calls are needed.
   - `dalpg` depends only on pgx (plus `dal`). The generated DAL package's
     *exported* API still exposes no pgx types; `DBTX` is only used inside the
     generated implementation.
@@ -1328,6 +1346,8 @@ The manual is written once the MVP exists (end of phase 2 plus a runnable demo),
 |---|---|
 | Generator packaging | Standalone CLI embedding protocompile; buf plugin later |
 | Domain types | sqlc's model structs, re-exported as type aliases from the generated DAL package. No separate domain model and no copy layer (revised 2026-09-30; originally generated structs). Proto is only the IDL |
+| Observability | Tracing and metrics come from pgx's own tracers, configured on the pool. The Runner puts `dal.Op` and the attempt number on every attempt's context (`dal.OpFromContext`), so tracers see the repository method and retries without wrappers. Generated code stays out of it |
+| Pool injection | `dalpg.DB` takes the `dalpg.Pool` interface (not `*pgxpool.Pool`), resolved per operation; generated repositories take a `*dalpg.Runner`. Users can wrap pools (blue/green swap, tracing, tenancy) without editing generated code |
 | Driver isolation | No `pgx`/`pgtype`/`pgconn` types in the DAL package's exported API: full sqlc type overrides, the DAL's own `Tx`, errors mapped to `dal` sentinels, pools only at the composition root. Enforced by a `go/types` test |
 | Insert parameters | Every field is a pointer in Create/Upsert params (decided 2026-10-01). nil means: required without default → `ErrMissingField`; with default → the default (`COALESCE(sqlc.narg(..), default)`); optional → NULL; UUID PK → a UUIDv7. Call sites use Go 1.26 `new(expr)` |
 | Generated writes | Basic and safe only: version compare-and-swap on update (follow-up existence check tells `ErrNotFound` from `ErrVersionConflict`), upsert on the PK or a unique field (last writer wins, never revives soft-deleted rows), soft delete. Everything else is a custom sqlc query in the user-owned `queries/custom/` |

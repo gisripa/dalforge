@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -180,5 +181,92 @@ func TestRetriesClassifiedErrors(t *testing.T) {
 	err = r.Write(context.Background(), _op, func(context.Context, DBTX) error { return pgErr("23505") })
 	if !errors.Is(err, dal.ErrAlreadyExists) || attempts != 1 {
 		t.Errorf("unique violation: err = %v, attempts = %d; want ErrAlreadyExists after 1 attempt", err, attempts)
+	}
+}
+
+// fakePool records which instance an operation ran on.
+type fakePool struct {
+	name string
+	used *[]string
+}
+
+func (f fakePool) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
+	*f.used = append(*f.used, f.name)
+	return pgconn.CommandTag{}, nil
+}
+func (f fakePool) Query(context.Context, string, ...any) (pgx.Rows, error) { return nil, nil }
+func (f fakePool) QueryRow(context.Context, string, ...any) pgx.Row        { return nil }
+func (f fakePool) Begin(context.Context) (pgx.Tx, error)                   { return nil, errors.New("unused") }
+
+// swappable is the kind of wrapper a blue/green switchover layer provides:
+// it delegates to whichever pool is current.
+type swappable struct{ cur atomic.Pointer[fakePool] }
+
+func (s *swappable) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	return s.cur.Load().Exec(ctx, sql, args...)
+}
+func (s *swappable) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	return s.cur.Load().Query(ctx, sql, args...)
+}
+func (s *swappable) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	return s.cur.Load().QueryRow(ctx, sql, args...)
+}
+func (s *swappable) Begin(ctx context.Context) (pgx.Tx, error) { return s.cur.Load().Begin(ctx) }
+
+// TestPoolWrapperSwap shows a pool can be swapped under a running Runner
+// without rebuilding it or the repositories that hold it.
+func TestPoolWrapperSwap(t *testing.T) {
+	var used []string
+	sw := &swappable{}
+	blue := fakePool{name: "blue", used: &used}
+	sw.cur.Store(&blue)
+	r := New(DB{Writer: sw})
+
+	write := func() {
+		if err := r.Write(context.Background(), _op, func(ctx context.Context, q DBTX) error {
+			_, err := q.Exec(ctx, "SELECT 1")
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write()
+	green := fakePool{name: "green", used: &used}
+	sw.cur.Store(&green) // switchover
+	write()
+
+	if len(used) != 2 || used[0] != "blue" || used[1] != "green" {
+		t.Errorf("operations ran on %v, want [blue green]", used)
+	}
+}
+
+// TestAttemptInContext: each attempt sees its op and attempt number, with no
+// wrapper around the call, even with a caller-supplied retrier.
+func TestAttemptInContext(t *testing.T) {
+	retryThrice := dal.RetrierFunc(func(ctx context.Context, op dal.Op, fn func(context.Context) error) error {
+		var err error
+		for range 3 {
+			if err = fn(ctx); err == nil || !dal.ShouldRetry(op, err) {
+				return err
+			}
+		}
+		return err
+	})
+	r := New(DB{Writer: lazyPool(t)}, WithRetrier(retryThrice))
+
+	var seen []int
+	err := r.Write(context.Background(), _op, func(ctx context.Context, _ DBTX) error {
+		op, attempt, ok := dal.OpFromContext(ctx)
+		if !ok || op != _op {
+			t.Errorf("attempt context = %v, %v; want %v", op, ok, _op)
+		}
+		seen = append(seen, attempt)
+		if attempt < 3 {
+			return pgErr("40001")
+		}
+		return nil
+	})
+	if err != nil || len(seen) != 3 || seen[0] != 1 || seen[2] != 3 {
+		t.Errorf("err = %v, attempts seen = %v; want success with [1 2 3]", err, seen)
 	}
 }

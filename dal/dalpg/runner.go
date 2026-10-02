@@ -19,12 +19,25 @@ type DBTX interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
+// Pool is what DB routes operations to. *pgxpool.Pool satisfies it; so does
+// any wrapper you write around one, e.g. to swap the underlying pool during
+// an Aurora blue/green switchover, add tracing, or pick a pool per tenant.
+// Generated code never sees pools, so such wrappers need no edits to it.
+type Pool interface {
+	DBTX
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+var _ Pool = (*pgxpool.Pool)(nil)
+
 // DB holds the reader and writer pools. Eventual reads use Reader; strong
 // reads, writes and transactions use Writer. A single-instance setup passes
-// the same pool twice, or leaves Reader nil.
+// the same pool twice, or leaves Reader nil. The pools are resolved on every
+// operation, so a Pool wrapper may change what it delegates to at any time;
+// a transaction stays on the connection it began on.
 type DB struct {
-	Reader *pgxpool.Pool
-	Writer *pgxpool.Pool
+	Reader Pool
+	Writer Pool
 }
 
 // Option configures a Runner.
@@ -45,6 +58,10 @@ func WithClassifier(c Classifier) Option {
 // Runner executes repository operations: it picks the pool, applies the
 // retry policy, and turns every failure into a classified *dal.Error.
 // Generated repositories hold one; it is safe for concurrent use.
+//
+// Every attempt runs with a context carrying the operation and attempt
+// number (dal.OpFromContext), so tracers and metrics configured on the pgx
+// pool see which repository method ran and whether it was a retry.
 type Runner struct {
 	db       DB
 	retrier  dal.Retrier
@@ -77,17 +94,21 @@ func (r *Runner) Write(ctx context.Context, op dal.Op, fn func(ctx context.Conte
 	return r.run(ctx, op, r.db.Writer, fn)
 }
 
-func (r *Runner) run(ctx context.Context, op dal.Op, pool *pgxpool.Pool, fn func(context.Context, DBTX) error) error {
+func (r *Runner) run(ctx context.Context, op dal.Op, pool Pool, fn func(context.Context, DBTX) error) error {
 	if r.tx != nil {
 		// Inside a transaction: statements run on it and are never retried
-		// on their own; a 40001 aborts the whole transaction.
-		return wrap(op, fn(ctx, r.tx), r.classify)
+		// on their own (a 40001 aborts the whole transaction). They carry
+		// their own op and the transaction's attempt number.
+		_, attempt, _ := dal.OpFromContext(ctx)
+		return wrap(op, fn(dal.WithOp(ctx, op, max(attempt, 1)), r.tx), r.classify)
 	}
 	if pool == nil {
 		return wrap(op, errors.New("dalpg: no pool configured"), r.classify)
 	}
+	attempt := 0 // counted here, so it is right for any Retrier
 	return r.retrier.Do(ctx, op, func(ctx context.Context) error {
-		return wrap(op, fn(ctx, pool), r.classify)
+		attempt++
+		return wrap(op, fn(dal.WithOp(ctx, op, attempt), pool), r.classify)
 	})
 }
 
@@ -103,7 +124,10 @@ func (r *Runner) InTx(ctx context.Context, op dal.Op, fn func(ctx context.Contex
 	if r.db.Writer == nil {
 		return wrap(op, errors.New("dalpg: no writer pool configured"), r.classify)
 	}
+	attempt := 0
 	return r.retrier.Do(ctx, op, func(ctx context.Context) error {
+		attempt++
+		ctx = dal.WithOp(ctx, op, attempt)
 		return wrap(op, pgx.BeginFunc(ctx, r.db.Writer, func(tx pgx.Tx) error {
 			return fn(ctx, &Runner{db: r.db, retrier: dal.NoRetry, classify: r.classify, tx: tx})
 		}), r.classify)

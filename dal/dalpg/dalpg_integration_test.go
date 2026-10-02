@@ -5,6 +5,7 @@ package dalpg
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -225,5 +226,77 @@ func TestInTx(t *testing.T) {
 	})
 	if err != nil || runs != 2 || count() != 3 {
 		t.Errorf("retry: err = %v, runs = %d, rows = %d; want success on run 2 with only its insert kept (3 rows)", err, runs, count())
+	}
+}
+
+// opTracer is a pgx.QueryTracer, as an observability library would provide,
+// recording which DAL operation and attempt each query belonged to.
+type opTracer struct{ seen chan string }
+
+func (o opTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryStartData) context.Context {
+	if op, attempt, ok := dal.OpFromContext(ctx); ok {
+		o.seen <- fmt.Sprintf("%s#%d", op.Method, attempt)
+	}
+	return ctx
+}
+func (opTracer) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
+
+// TestPgxTracerSeesOp: a tracer configured on the pool (the composition
+// root) labels queries with the DAL op and attempt; nothing wraps the calls.
+func TestPgxTracerSeesOp(t *testing.T) {
+	base := pgtest.New(t)
+	ctx := context.Background()
+	exec(t, base, "CREATE TABLE ledger (id int PRIMARY KEY)")
+
+	tracer := opTracer{seen: make(chan string, 16)}
+	cfg := base.Config().Copy()
+	cfg.ConnConfig.Tracer = tracer
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	r := New(DB{Writer: pool}, WithRetrier(dal.Backoff{Attempts: 2, Base: time.Millisecond, Max: time.Millisecond}))
+
+	insertOp := dal.Op{Entity: "Ledger", Method: "Insert", Kind: dal.OpCreate}
+	if err := r.Write(ctx, insertOp, func(ctx context.Context, q DBTX) error {
+		_, err := q.Exec(ctx, "INSERT INTO ledger VALUES (1)")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	txOp := dal.Op{Entity: "Ledger", Method: "Batch", Kind: dal.OpTx, Idempotent: true}
+	runs := 0
+	if err := r.InTx(ctx, txOp, func(ctx context.Context, tx *Runner) error {
+		runs++
+		if err := tx.Write(ctx, insertOp, func(ctx context.Context, q DBTX) error {
+			_, err := q.Exec(ctx, "INSERT INTO ledger VALUES ($1)", 10+runs)
+			return err
+		}); err != nil {
+			return err
+		}
+		if runs == 1 {
+			return &pgconn.PgError{Code: "40001", Message: "simulated"}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	close(tracer.seen)
+	var got []string
+	for s := range tracer.seen {
+		got = append(got, s)
+	}
+	// BEGIN/ROLLBACK/COMMIT run under the tx op; statements under their own
+	// op with the transaction's attempt.
+	want := []string{
+		"Insert#1",                       // plain write
+		"Batch#1", "Insert#1", "Batch#1", // tx attempt 1: BEGIN, insert, ROLLBACK (40001)
+		"Batch#2", "Insert#2", "Batch#2", // tx attempt 2: BEGIN, insert, COMMIT
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("tracer saw %v, want %v", got, want)
 	}
 }
