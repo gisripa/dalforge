@@ -920,6 +920,7 @@ never mix. Custom queries land on the same sqlc `Queries` and can join a
 | `dal.ErrVersionConflict` | a CAS update that matched no row while the row exists (follow-up check) |
 | `dal.ErrAlreadyExists` | `23505` unique violation |
 | `dal.ErrInvalidPageToken` | a page token that fails to decode or doesn't match the query |
+| `dal.ErrInvalidArgument` | caller error, never retried; `dal.ErrMissingField` (with `*dal.MissingFieldError` naming the field) wraps it for nil required insert params |
 
 Every error the repository returns is a `*dal.Error`. It carries the `Op`, the
 backend code (the SQLSTATE, for Postgres), a `Retryability`, and the
@@ -1000,9 +1001,12 @@ DALForge:
 - **`dalpg.WithClassifier(func(err error, base dal.Retryability) dal.Retryability)`**
   adjusts the SQLSTATE mapping without replacing the policy. For example, you
   could treat `57014` as retryable.
-- **The default is `dal.DefaultRetrier`:** at most 3 attempts, exponential
-  backoff with full jitter (25 ms base, 1 s cap), following `ShouldRetry` and
-  respecting the context. `dal.NoRetry` turns retries off.
+- **The default is `dal.DefaultRetrier`,** a `dal.Backoff{Attempts: 3, Base:
+  25ms, Max: 1s}`: exponential backoff with full jitter, following
+  `ShouldRetry` and respecting the context. If the context ends while waiting,
+  it returns the operation's error joined with the context error.
+  `dal.NoRetry` turns retries off. `ShouldRetry` never retries a canceled or
+  expired context.
 
 The generated implementation wraps each method in `retrier.Do`. Inside `WithTx`,
 individual statements are never retried: a `40001` aborts the whole
