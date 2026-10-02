@@ -620,13 +620,15 @@ Postgres:
 | DAL202 | error | `order_by` contradicts an explicit index whose leading columns equal `eq` |
 | DAL203 | warn | mixed sort directions; the keyset predicate can't use a row comparison |
 | DAL204 | error | a table, column or index name isn't a valid unquoted identifier: lowercase letters, digits and `_`, starting with a letter or `_`. Also flagged: longer than 63 bytes (Postgres silently truncates), or a reserved SQL keyword. dalforge never quotes identifiers, so names must also work in custom queries |
-| DAL205 | error | name collision between a generated query and a custom sqlc query |
+| DAL205 | error | two rpcs generate the same sqlc query name (`<Store minus "Store"><Method>`, e.g. stores `Order` and `OrderStore` both give `OrderGet`), or a generated name collides with a custom sqlc query |
+| DAL213 | error | two columns of the same SQL type need different Go types (e.g. `numeric` as `string` and as `decimal.Decimal`). sqlc's nullable insert-parameter overrides are per type, so give them the same `go_type` |
 | DAL206 | info | two List rpcs share an equality prefix but sort differently; aligning `order_by` would let them share one index |
 | DAL207 | error | the deploy target (`dalforge.yaml` `pg.version`) is older than `min_version`, or a type/feature in use needs a newer version |
 | DAL208 | error | a `custom_type` has no (or an invalid) `go_type`, a `go_type` is set without `custom_type`, or a known extension type (`vector`, `geometry`, `citext`, …) is used without declaring its extension in the file's `(dal.pg.v1.file).extensions` |
 | DAL209 | error | no or incompatible type mapping: `uint64` without `custom_type`, a `format` on a non-string field, or an explicit pg `type` that doesn't fit the field's kind (e.g. `uuid` on `int64`) |
 | DAL210 | error | two entities map to the same table, or two fields to the same column |
 | DAL211 | error | an explicit pg index references (`columns`, `include`) a missing or repeated field. A column name used by mistake gets a hint |
+| DAL212 | info | an `optional` field has a column `default`: a nil insert parameter means "use the default", so Create can't insert NULL (Update can) |
 | DAL3xx | error | migration safety; see §8 |
 
 DAL4xx is reserved for a future DynamoDB backend.
@@ -765,7 +767,7 @@ type OrderReadRepository interface {
 }
 
 type OrderWriteRepository interface {
-	Create(ctx context.Context, o Order) (Order, error)
+	Create(ctx context.Context, p CreateOrderParams) (Order, error) // every field a pointer
 	UpdateStatus(ctx context.Context, o Order) (Order, error) // version compare-and-swap
 	Delete(ctx context.Context, id uuid.UUID) error
 }
@@ -797,6 +799,61 @@ any exported signature or model field of the DAL package:
 A test (step 1.12) inspects the generated package's exported API with
 `go/types` and fails on any driver type. A `go list -deps` check keeps the IR,
 protobuf and the generator out of it.
+
+### Insert parameters: every field is a pointer
+
+A Postgres column default only applies when an INSERT leaves the column out.
+One generated INSERT serves every call, so it lists every column. With plain
+values, an unset Go field (`""`, `uuid.Nil`) would be written as-is: a
+declared default would silently never apply, and a forgotten required field
+would insert its zero value.
+
+So `Create` (and Upsert's insert half) take a params struct, an alias of
+sqlc's params type, not the read model, and **every field is a pointer**.
+`nil` always has a defined meaning:
+
+| Field | `nil` means | Enforced by |
+|---|---|---|
+| required, no default | **error**: the field is missing (`dal.ErrMissingField`, wraps `ErrInvalidArgument`, names the field) | the DAL, before any round trip |
+| required, with default | the column default | SQL: `COALESCE(sqlc.narg(status), 'pending')` |
+| `optional`, no default | `NULL` | SQL |
+| `optional`, with default | the column default, so Create can't insert NULL (DAL212 info; Update can) | SQL |
+| primary key with `FORMAT_UUID` | the DAL assigns a UUIDv7 | the DAL |
+| role fields | not in the params | — |
+
+**How the generated SQL gets sqlc to produce pointers** (found by running sqlc
+on the output, step 1.7):
+- **Why `narg` alone fails:** with plain `sqlc.narg(id)`, the column's type
+  override wins and its nullability is dropped (`uuid.UUID`, not a pointer),
+  and inside `COALESCE` sqlc can't infer a type at all (`interface{}`).
+- **Every insert parameter is cast to its column type:**
+  `sqlc.narg(id)::uuid`, `COALESCE(sqlc.narg(status)::text, 'pending')`. sqlc
+  then types the parameter from the cast, as nullable.
+- **`sqlc.yaml` adds a nullable `db_type` override** for each SQL type sqlc
+  would otherwise map to a `pgtype` wrapper (`uuid`, `jsonb`, `numeric`,
+  `timestamptz`, `date`, `inet`, custom types). Text, integers, booleans,
+  floats, `bytea` and arrays are already clean pointers or nil-able slices.
+- **sqlc's catalog naming is inconsistent:** `numeric` only matches as
+  `pg_catalog.numeric`, while `timestamptz` only matches unqualified. The sqlc
+  feedback test pins this.
+- **A known limit:** these overrides are per SQL type, so two columns of one
+  type that need different Go types (`numeric` as `string` here,
+  `decimal.Decimal` there) are a conflict (DAL213).
+- **The read model is unaffected:** its per-column overrides keep plain
+  values for required columns.
+
+Go 1.26's `new(expr)` keeps call sites short, with no helper needed:
+
+```go
+o, err := repo.Create(ctx, ordersdal.CreateOrderParams{
+	AccountID: new(acct),
+	Note:      new("rush"), // Status omitted → 'pending'
+})
+```
+
+The read model (`Order`) keeps plain values for required columns. Pointer
+semantics for *updates* (whether nil means "unchanged" or "error") is still
+open and is decided with the DAL implementation.
 
 ### Writes: basic and safe, the rest is custom
 
@@ -1060,6 +1117,19 @@ gen/sqlcdb/                 # sqlc output (both query sets)
 gen/orders/v1/ordersdal/    # DAL package: model aliases, Read/Write/Repository interfaces, implementation
 ```
 
+Generated query files hold one file per table, named `<table>.sql`. Each query
+is named `<Store minus "Store"><Method>` for sqlc, lists its columns
+explicitly, and uses proto field names as parameters (`@account_id`). Unique
+fields on soft-delete tables become partial unique indexes
+(`WHERE deleted_at IS NULL`). `sqlc.yaml` carries one type override per
+column, nullable per-type overrides for insert parameters, and Go initialisms
+(`id`, `ip`, `url`, `uuid`, `http`, `json`, `api`, …) so fields read
+`AccountID`, `ClientIP` (design §7).
+
+**When there are no queries at all** (entities but no stores, and no custom
+queries), sqlc refuses to run. `dalforge generate` then skips sqlc with a
+note rather than failing.
+
 Generated and custom queries go through **one** sqlc config, so they share a
 `Queries` type and custom queries can run inside the same transactions.
 
@@ -1189,7 +1259,7 @@ The manual is kept true by tests:
 - complete IDL snippets in the manual compile;
 - diagnostics link to their rule entry.
 
-Every increment updates the manual sections it affects.
+The manual is written once the MVP exists (end of phase 2 plus a runnable demo), so it describes a stable surface. From then on, every increment updates the sections it affects.
 
 ## 13. Roadmap
 
@@ -1217,6 +1287,7 @@ Every increment updates the manual sections it affects.
 | Generator packaging | Standalone CLI embedding protocompile; buf plugin later |
 | Domain types | sqlc's model structs, re-exported as type aliases from the generated DAL package. No separate domain model and no copy layer (revised 2026-09-30; originally generated structs). Proto is only the IDL |
 | Driver isolation | No `pgx`/`pgtype`/`pgconn` types in the DAL package's exported API: full sqlc type overrides, the DAL's own `Tx`, errors mapped to `dal` sentinels, pools only at the composition root. Enforced by a `go/types` test |
+| Insert parameters | Every field is a pointer in Create/Upsert params (decided 2026-10-01). nil means: required without default → `ErrMissingField`; with default → the default (`COALESCE(sqlc.narg(..), default)`); optional → NULL; UUID PK → a UUIDv7. Call sites use Go 1.26 `new(expr)` |
 | Generated writes | Basic and safe only: version compare-and-swap on update (follow-up existence check tells `ErrNotFound` from `ErrVersionConflict`), upsert on the PK or a unique field (last writer wins, never revives soft-deleted rows), soft delete. Everything else is a custom sqlc query in the user-owned `queries/custom/` |
 | Index model | Query-first; explicit indexes only for partial/covering/sort-pinning |
 | Sort with no `order_by` | Inherit from matching explicit index, else PK + DAL103 |

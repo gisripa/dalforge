@@ -327,6 +327,27 @@
           "go_type": {
             "name": "float64"
           }
+        },
+        {
+          "name": "day",
+          "field": "day",
+          "number": 33,
+          "type": "date",
+          "not_null": true,
+          "go_type": {
+            "import": "time",
+            "name": "Time"
+          }
+        },
+        {
+          "name": "client_ip",
+          "field": "client_ip",
+          "number": 34,
+          "type": "inet",
+          "not_null": true,
+          "go_type": {
+            "name": "string"
+          }
         }
       ],
       "primary_key": [

@@ -90,4 +90,27 @@ message HTTPRequestLog {
     go_type: "github.com/pgvector/pgvector-go.Vector"
   }];
   double ratio = 32 [(dal.pg.v1.column).type = TYPE_DOUBLE_PRECISION];
+  google.protobuf.Timestamp day = 33 [(dal.pg.v1.column).type = TYPE_DATE];
+  string client_ip = 34 [(dal.pg.v1.column).type = TYPE_INET];
+}
+
+// A store, so sqlc generates the model and every type override is exercised.
+service HTTPRequestLogStore {
+  option (dal.v1.store) = {entity: "HTTPRequestLog"};
+
+  rpc GetLog(LogKey) returns (HTTPRequestLog) {
+    option (dal.v1.query) = {
+      get: {}
+    };
+  }
+  // Exercises an insert parameter of every type.
+  rpc CreateLog(HTTPRequestLog) returns (HTTPRequestLog) {
+    option (dal.v1.query) = {
+      create: {}
+    };
+  }
+}
+
+message LogKey {
+  int64 id = 1;
 }

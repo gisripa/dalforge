@@ -5,6 +5,7 @@
 go = "1.26"            # latest 1.26.x patch
 golangci-lint = "2"    # latest 2.x
 protoc = "36"          # compiles proto/; protoc-gen-go is a go.mod tool, so it matches the runtime
+sqlc = "1.31"          # prebuilt binary; generated code is tested against it (also what consumers pin)
 # Container runtime without Docker Desktop: a Colima VM running dockerd.
 colima = "latest"
 lima = "latest"        # colima's VM manager

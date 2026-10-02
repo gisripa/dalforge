@@ -13,12 +13,13 @@ import (
 
 // Rule IDs reported by Build.
 const (
-	RuleIdentifier = "DAL204" // invalid, over-long or reserved identifier
-	RuleVersion    = "DAL207" // target older than required
-	RuleCustomType = "DAL208" // custom_type/go_type pairing, undeclared extension
-	RuleTypeMap    = "DAL209" // no or incompatible type mapping
-	RuleDuplicate  = "DAL210" // duplicate table or column name
-	RuleIndexRef   = "DAL211" // index references an unknown or repeated field
+	RuleIdentifier  = "DAL204" // invalid, over-long or reserved identifier
+	RuleVersion     = "DAL207" // target older than required
+	RuleCustomType  = "DAL208" // custom_type/go_type pairing, undeclared extension
+	RuleTypeMap     = "DAL209" // no or incompatible type mapping
+	RuleDuplicate   = "DAL210" // duplicate table or column name
+	RuleIndexRef    = "DAL211" // index references an unknown or repeated field
+	RuleNullDefault = "DAL212" // info: optional field with a default can't be inserted as NULL
 )
 
 // _configPos attributes findings about the deploy target to the config file.
@@ -121,6 +122,11 @@ func (b *builder) column(e *ir.Entity, f *ir.Field, hint *pgir.Column) *Column {
 		NotNull: !f.Nullable,
 		Default: hint.Default,
 		Unique:  f.Unique,
+	}
+	if f.Nullable && col.Default != "" && f.Role == ir.RoleNone {
+		b.diags.Add(RuleNullDefault, diag.Info, f.Pos,
+			"field %q is optional and has default %s: a nil insert parameter means \"use the default\", so Create can't insert NULL (Update can)",
+			f.Name, col.Default)
 	}
 	if col.Default == "" {
 		switch f.Role {

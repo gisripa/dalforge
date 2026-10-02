@@ -363,6 +363,28 @@
               "line": 92,
               "col": 3
             }
+          },
+          {
+            "name": "day",
+            "column": "day",
+            "number": 33,
+            "kind": "timestamp",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 93,
+              "col": 3
+            }
+          },
+          {
+            "name": "client_ip",
+            "column": "client_ip",
+            "number": 34,
+            "kind": "string",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 94,
+              "col": 3
+            }
           }
         ],
         "reserved": {
@@ -392,7 +414,71 @@
         }
       }
     ],
-    "stores": null
+    "stores": [
+      {
+        "full_name": "types.v1.HTTPRequestLogStore",
+        "entity": "types.v1.HTTPRequestLog",
+        "queries": [
+          {
+            "method": "GetLog",
+            "request": {
+              "full_name": "types.v1.LogKey",
+              "fields": [
+                {
+                  "name": "id",
+                  "number": 1,
+                  "kind": "int64"
+                }
+              ]
+            },
+            "response": {
+              "full_name": "types.v1.HTTPRequestLog",
+              "entity": true
+            },
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 101,
+              "col": 3
+            },
+            "spec": {
+              "get": {
+                "by": {
+                  "names": [
+                    "id"
+                  ],
+                  "source": "defaulted"
+                },
+                "consistency": "eventual"
+              }
+            }
+          },
+          {
+            "method": "CreateLog",
+            "request": {
+              "full_name": "types.v1.HTTPRequestLog",
+              "entity": true
+            },
+            "response": {
+              "full_name": "types.v1.HTTPRequestLog",
+              "entity": true
+            },
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 107,
+              "col": 3
+            },
+            "spec": {
+              "create": {}
+            }
+          }
+        ],
+        "pos": {
+          "file": "types/v1/types.proto",
+          "line": 98,
+          "col": 1
+        }
+      }
+    ]
   },
   "pg": {
     "files": {
@@ -442,6 +528,12 @@
           },
           "32": {
             "type": "double precision"
+          },
+          "33": {
+            "type": "date"
+          },
+          "34": {
+            "type": "inet"
           }
         }
       }

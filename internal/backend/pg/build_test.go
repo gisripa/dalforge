@@ -51,7 +51,7 @@ func TestModelGolden(t *testing.T) {
 // TestRules pins the findings for one fixture per rule. Valid controls inside
 // each fixture must stay silent.
 func TestRules(t *testing.T) {
-	for _, rule := range []string{"dal204", "dal207", "dal208", "dal209", "dal210", "dal211"} {
+	for _, rule := range []string{"dal204", "dal207", "dal208", "dal209", "dal210", "dal211", "dal212"} {
 		t.Run(rule, func(t *testing.T) {
 			_, diags := build(t, "testdata", rule+".proto", Target{Major: 16})
 			for _, d := range diags {
