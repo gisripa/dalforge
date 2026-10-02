@@ -8,14 +8,29 @@ import (
 	"context"
 
 	"example.com/dalforgefixture/gen/sqlcdb"
+	"github.com/gisripa/dalforge/dal"
 	"github.com/google/uuid"
 )
 
 // Order is the orders.v1.Order entity, stored in table orders.
 type Order = sqlcdb.Order
 
+// OrderListByAccountParams are the parameters of Order.ListByAccount: the filters, plus paging.
+// An empty PageToken asks for the first page; PageSize 0 means the default.
+type OrderListByAccountParams struct {
+	AccountID uuid.UUID
+	PageSize  int32
+	PageToken string
+}
+
+// WithPageToken returns p asking for the page at token, for dal.All.
+func (p OrderListByAccountParams) WithPageToken(token string) OrderListByAccountParams {
+	p.PageToken = token
+	return p
+}
+
 // OrderCreateParams are the parameters of Order.Create.
-// Every field is a pointer; nil means:
+// Fields to write are pointers; nil means:
 //   - ID: a new UUIDv7
 //   - AccountID: an error (required)
 //   - Status: the column default 'pending'
@@ -23,6 +38,9 @@ type Order = sqlcdb.Order
 type OrderCreateParams = sqlcdb.OrderCreateParams
 
 // OrderUpdateStatusParams are the parameters of Order.UpdateStatus.
+// Fields to write are pointers; nil means:
+//   - Status: an error (required)
+//   - Note: set NULL
 type OrderUpdateStatusParams = sqlcdb.OrderUpdateStatusParams
 
 // OrderReadRepository holds the read access patterns of orders.v1.OrderStore.
@@ -30,7 +48,8 @@ type OrderReadRepository interface {
 	// GetById implements orders.v1.OrderStore.GetById (get).
 	GetById(ctx context.Context, id uuid.UUID) (Order, error)
 
-	// ListByAccount (list) arrives in phase 2.
+	// ListByAccount implements orders.v1.OrderStore.ListByAccount (list).
+	ListByAccount(ctx context.Context, p OrderListByAccountParams) (dal.Page[Order], error)
 }
 
 // OrderWriteRepository holds the write access patterns of orders.v1.OrderStore.

@@ -14,7 +14,7 @@ import (
 type HTTPRequestLog = sqlcdb.HTTPRequestLog
 
 // HTTPRequestLogCreateLogParams are the parameters of HTTPRequestLog.CreateLog.
-// Every field is a pointer; nil means:
+// Fields to write are pointers; nil means:
 //   - ID: an error (required)
 //   - Ok: an error (required)
 //   - I32: an error (required)

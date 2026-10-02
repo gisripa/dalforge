@@ -1,0 +1,106 @@
+// Access paths: sort inheritance, index derivation and merging.
+syntax = "proto3";
+
+package paths;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Doc {
+  option (dal.pg.v1.table) = {
+    index_budget: 10
+    indexes: [{name: "docs_by_folder", columns: ["folder_id", "title"]}]
+  };
+
+  string tenant_id = 1 [(dal.v1.field).primary_key = true];
+  string id = 2 [(dal.v1.field) = {primary_key: true, format: FORMAT_UUID}];
+  string folder_id = 3;
+  string owner_id = 4;
+  string title = 5;
+  google.protobuf.Timestamp created_at = 6 [(dal.v1.field).role = ROLE_CREATE_TIME];
+  optional google.protobuf.Timestamp published_at = 7;
+  optional google.protobuf.Timestamp deleted_at = 8 [(dal.v1.field).role = ROLE_DELETE_TIME];
+}
+
+message ByTenant {
+  string tenant_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ByFolder {
+  string folder_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ByOwner {
+  string owner_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ByOwnerTitle {
+  string owner_id = 1;
+  string title = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ByOwnerPublished {
+  string owner_id = 1;
+  google.protobuf.Timestamp published_at_from = 2;
+  google.protobuf.Timestamp published_at_to = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message DocPage {
+  repeated Doc docs = 1;
+  string next_page_token = 2;
+}
+
+service DocStore {
+  option (dal.v1.store) = {entity: "Doc"};
+  // No order_by and no explicit index on [tenant_id]: the primary key
+  // (tenant_id, id) serves it.
+  rpc ListDocsByTenant(ByTenant) returns (DocPage) {
+    option (dal.v1.query) = {
+      list: {eq: ["tenant_id"]}
+    };
+  }
+  // No order_by: inherits the title order of docs_by_folder, whose leading
+  // column is the eq field.
+  rpc ListDocsByFolder(ByFolder) returns (DocPage) {
+    option (dal.v1.query) = {
+      list: {eq: ["folder_id"]}
+    };
+  }
+  // A prefix of the next list's index: merged into it.
+  rpc ListDocsByOwner(ByOwner) returns (DocPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["owner_id"]
+        order_by: ["title DESC"]
+      }
+    };
+  }
+  rpc ListDocsByOwnerAndTitle(ByOwnerTitle) returns (DocPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["owner_id", "title"]
+        order_by: ["created_at DESC"]
+      }
+    };
+  }
+  // A nullable range field: the index skips NULLs.
+  rpc ListDocsByOwnerAndPublishedAt(ByOwnerPublished) returns (DocPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["owner_id"]
+        range: "published_at"
+      }
+    };
+  }
+}

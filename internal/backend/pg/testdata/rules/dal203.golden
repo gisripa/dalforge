@@ -1,0 +1,1 @@
+dal203.proto:30:3: warning DAL203: rpc ListScoresByGame sorts in mixed directions [points DESC, player, id]; the keyset predicate can't use a single row comparison, so it is expanded into ORs, which Postgres plans less efficiently

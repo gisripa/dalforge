@@ -1,0 +1,5 @@
+dal119.proto:14:3: error DAL119: field "deleted_at" has ROLE_DELETE_TIME, which needs an optional google.protobuf.Timestamp: live rows have no deletion time, so it must be nullable
+dal119.proto:15:3: error DAL119: field "version" has ROLE_VERSION, which needs a required int64 (or int32): updates increment it
+dal119.proto:17:3: error DAL119: field "created_at" has ROLE_CREATE_TIME, which needs a google.protobuf.Timestamp
+dal119.proto:19:3: error DAL119: field "modified_at": touched_at already has ROLE_UPDATE_TIME; an entity has at most one field per role
+dal119.proto:26:3: error DAL119: field "version" has ROLE_VERSION, which needs a required int64 (or int32): updates increment it

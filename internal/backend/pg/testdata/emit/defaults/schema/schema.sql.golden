@@ -15,3 +15,9 @@ CREATE TABLE item (
 );
 
 CREATE UNIQUE INDEX item_sku_key ON item (sku) WHERE deleted_at IS NULL;
+
+-- derived for: ListItemsByTenantAndCreatedAt
+CREATE INDEX item_tenant_id_created_at_id_idx ON item (tenant_id, created_at, id) WHERE deleted_at IS NULL;
+
+-- derived for: ListItemsByTenantNewest
+CREATE INDEX item_tenant_id_created_at_id_desc_idx ON item (tenant_id, created_at, id DESC) WHERE deleted_at IS NULL;

@@ -45,13 +45,42 @@ func emitQueries(s *ir.Schema, m *Schema) (map[string][]byte, diag.List) {
 			names[name] = origin
 
 			fmt.Fprintf(b, "\n-- %s (%s)\n", origin, q.Spec.Kind())
-			qb := queryBuilder{e: e, t: t, q: q}
+			qb := queryBuilder{e: e, t: t, q: q, path: m.Paths[storeShortName(st)+"."+q.Method]}
+			if _, ok := q.Spec.(*ir.List); ok {
+				// The cursor variant is a second sqlc query.
+				after := name + "After"
+				if prev, dup := names[after]; dup {
+					diags.Add(RuleQueryName, diag.Error, q.Pos, "rpc %s generates the sqlc query %s, which %s also generates; rename one rpc", origin, after, prev)
+					continue
+				}
+				names[after] = origin
+			}
 			sql, err := qb.render(name)
 			if err != nil {
 				diags.Add(_ruleInternal, diag.Error, q.Pos, "rpc %s: %v (Emit needs a model Build reported no errors for)", origin, err)
 				continue
 			}
 			b.WriteString(sql)
+		}
+
+		// A versioned update that changes zero rows is either a missing row
+		// or a stale version; the repository tells them apart with this
+		// existence check, run only on that failure path.
+		if needsExists(st, e) {
+			name := short + "Exists"
+			if prev, dup := names[name]; dup {
+				diags.Add(RuleQueryName, diag.Error, st.Pos, "the internal sqlc query %s (version-conflict check of %s) collides with %s; rename the rpc", name, st.FullName, prev)
+				continue
+			}
+			names[name] = st.FullName + " (internal exists check)"
+			qb := queryBuilder{e: e, t: t}
+			conds, err := qb.match(e.PrimaryKey())
+			if err != nil {
+				diags.Add(_ruleInternal, diag.Error, st.Pos, "%v", err)
+				continue
+			}
+			fmt.Fprintf(b, "\n-- %s: existence check, used to tell a stale version from a missing row\n", st.FullName)
+			fmt.Fprintf(b, "-- name: %s :one\nSELECT EXISTS (\n  SELECT 1 FROM %s\n  %s\n);\n", name, t.Name, strings.ReplaceAll(where(conds), "\n", "\n  "))
 		}
 	}
 
@@ -72,9 +101,10 @@ func (m *Schema) table(entity string) *Table {
 }
 
 type queryBuilder struct {
-	e *ir.Entity
-	t *Table
-	q *ir.Query
+	e    *ir.Entity
+	t    *Table
+	q    *ir.Query
+	path *AccessPath // List only
 }
 
 func (qb queryBuilder) render(name string) (string, error) {
@@ -87,9 +117,10 @@ func (qb queryBuilder) render(name string) (string, error) {
 		return qb.update(name, s)
 	case *ir.Delete:
 		return qb.delete(name)
-	case *ir.List, *ir.Upsert:
-		// Keyset List (2.3) and Upsert (2.6) arrive in phase 2.
-		return fmt.Sprintf("-- %s: not generated yet (%s queries arrive in phase 2).\n", name, s.Kind()), nil
+	case *ir.List:
+		return qb.list(name, s)
+	case *ir.Upsert:
+		return qb.upsert(name, s)
 	}
 	return "", fmt.Errorf("unsupported access pattern %s", qb.q.Spec.Kind())
 }
@@ -145,7 +176,8 @@ func (qb queryBuilder) create(name string) (string, error) {
 			// Every insert parameter is nullable (a pointer in Go), so "unset"
 			// is representable: nil uses the column default when there is one,
 			// is NULL for an optional column, and is rejected by the DAL for a
-			// required column without a default (design §7).
+			// required column without a default (docs/design.md, "Insert
+			// parameters: every field is a pointer").
 			// The cast makes sqlc type the parameter from the cast rather than
 			// the column (whose override would drop the nullability); the
 			// nullable db_type overrides in sqlc.yaml then map it to a pointer.
@@ -186,7 +218,10 @@ func (qb queryBuilder) update(name string, s *ir.Update) (string, error) {
 		if c == nil {
 			return "", fmt.Errorf("field %q has no column", f)
 		}
-		sets = append(sets, fmt.Sprintf("%s = @%s", c.Name, f))
+		// Like Create: a cast, nullable parameter, so every SET field is a
+		// pointer in Go. nil on a required field is rejected by the DAL
+		// before this runs; nil on an optional field sets NULL.
+		sets = append(sets, fmt.Sprintf("%s = sqlc.narg(%s)::%s", c.Name, f, c.Type))
 	}
 	sets = append(sets, qb.managed()...)
 
@@ -223,4 +258,148 @@ func (qb queryBuilder) delete(name string) (string, error) {
 			name, cmd, qb.t.Name, strings.Join(sets, ",\n    "), where(conds), returning), nil
 	}
 	return fmt.Sprintf("-- name: %s %s\nDELETE FROM %s\n%s%s;\n", name, cmd, qb.t.Name, where(conds), returning), nil
+}
+
+// needsExists reports whether a store has an update on a versioned entity.
+func needsExists(st *ir.Store, e *ir.Entity) bool {
+	hasVersion := slices.ContainsFunc(e.Fields, func(f *ir.Field) bool { return f.Role == ir.RoleVersion })
+	hasUpdate := slices.ContainsFunc(st.Queries, func(q *ir.Query) bool { return q.Spec.Kind() == "update" })
+	return hasVersion && hasUpdate
+}
+
+// list renders a keyset-paginated List as two queries (docs/design.md,
+// "Pagination and page tokens"): the
+// first page, and the page after a cursor. Two fixed shapes, rather than one
+// query with "(@cursor IS NULL OR …)", keep every plan, including Postgres's
+// generic plans for prepared statements, able to use the index.
+func (qb queryBuilder) list(name string, s *ir.List) (string, error) {
+	if qb.path == nil {
+		return "", fmt.Errorf("no access path")
+	}
+	conds, err := qb.match(s.Eq)
+	if err != nil {
+		return "", err
+	}
+	if s.Range != "" {
+		c := column(qb.t, s.Range)
+		if c == nil {
+			return "", fmt.Errorf("field %q has no column", s.Range)
+		}
+		// Half-open, both bounds required, so consecutive windows never
+		// overlap or leave gaps.
+		conds = append(conds,
+			fmt.Sprintf("%s >= sqlc.arg(%s_from)::%s", c.Name, s.Range, c.Type),
+			fmt.Sprintf("%s < sqlc.arg(%s_to)::%s", c.Name, s.Range, c.Type))
+	}
+
+	var order []string
+	for _, k := range qb.path.Keys {
+		c := column(qb.t, k.Field)
+		if c == nil {
+			return "", fmt.Errorf("field %q has no column", k.Field)
+		}
+		dir := ""
+		if k.Desc {
+			dir = " DESC"
+		}
+		order = append(order, c.Name+dir)
+	}
+	tail := fmt.Sprintf("ORDER BY %s\nLIMIT sqlc.arg(page_limit)::int", strings.Join(order, ", "))
+
+	first := fmt.Sprintf("-- name: %s :many\nSELECT %s\nFROM %s\n%s\n%s;\n", name, qb.columns(), qb.t.Name, where(conds), tail)
+	cursor, err := qb.cursor()
+	if err != nil {
+		return "", err
+	}
+	next := fmt.Sprintf("\n-- name: %sAfter :many\nSELECT %s\nFROM %s\n%s\n%s;\n", name, qb.columns(), qb.t.Name, where(append(conds, cursor)), tail)
+	return first + next, nil
+}
+
+// cursor renders "the rows after the cursor" for the path's keyset: one row
+// comparison when all keys share a direction, else the expanded OR form.
+func (qb queryBuilder) cursor() (string, error) {
+	type key struct{ col, arg string }
+	var keys []key
+	for _, k := range qb.path.Keys {
+		c := column(qb.t, k.Field)
+		if c == nil {
+			return "", fmt.Errorf("field %q has no column", k.Field)
+		}
+		keys = append(keys, key{col: c.Name, arg: fmt.Sprintf("sqlc.arg(after_%s)::%s", k.Field, c.Type)})
+	}
+	op := func(desc bool) string {
+		if desc {
+			return "<"
+		}
+		return ">"
+	}
+	if !qb.path.Mixed {
+		cols, args := make([]string, len(keys)), make([]string, len(keys))
+		for i, k := range keys {
+			cols[i], args[i] = k.col, k.arg
+		}
+		return fmt.Sprintf("(%s) %s (%s)", strings.Join(cols, ", "), op(qb.path.Keys[0].Desc), strings.Join(args, ", ")), nil
+	}
+	var ors []string
+	for i, k := range keys {
+		var ands []string
+		for _, prev := range keys[:i] {
+			ands = append(ands, prev.col+" = "+prev.arg)
+		}
+		ands = append(ands, fmt.Sprintf("%s %s %s", k.col, op(qb.path.Keys[i].Desc), k.arg))
+		ors = append(ors, "("+strings.Join(ands, " AND ")+")")
+	}
+	return "(" + strings.Join(ors, "\n    OR ") + ")", nil
+}
+
+// upsert inserts a row or, on conflict, updates it: the last writer wins
+// (the version is bumped, no compare-and-swap), and a soft-deleted row is
+// never revived: the conflict update is skipped, so no row returns and the
+// DAL reports ErrAlreadyExists.
+func (qb queryBuilder) upsert(name string, s *ir.Upsert) (string, error) {
+	insert, err := qb.create(name)
+	if err != nil {
+		return "", err
+	}
+	insert = strings.TrimSuffix(insert, ";\n")
+	returning := insert[strings.LastIndex(insert, "\nRETURNING "):]
+	insert = strings.TrimSuffix(insert, returning)
+
+	var target []string
+	for _, f := range s.ConflictOn.Names {
+		c := column(qb.t, f)
+		if c == nil {
+			return "", fmt.Errorf("field %q has no column", f)
+		}
+		target = append(target, c.Name)
+	}
+	soft := roleColumn(qb.e, qb.t, ir.RoleDeleteTime)
+	conflict := fmt.Sprintf("ON CONFLICT (%s)", strings.Join(target, ", "))
+	// A unique non-key field on a soft-delete table is a partial unique
+	// index (live rows only); the conflict target must name its predicate.
+	if soft != "" && !sameSet(s.ConflictOn.Names, qb.e.PrimaryKey()) {
+		conflict += fmt.Sprintf(" WHERE %s IS NULL", soft)
+	}
+
+	var sets []string
+	for _, f := range s.Columns.Names {
+		c := column(qb.t, f)
+		if c == nil {
+			return "", fmt.Errorf("field %q has no column", f)
+		}
+		sets = append(sets, fmt.Sprintf("%s = EXCLUDED.%s", c.Name, c.Name))
+	}
+	for _, m := range qb.managed() {
+		// version = version + 1 must name the existing row's version.
+		if strings.Contains(m, "+ 1") {
+			col := strings.SplitN(m, " ", 2)[0]
+			m = fmt.Sprintf("%s = %s.%s + 1", col, qb.t.Name, col)
+		}
+		sets = append(sets, m)
+	}
+	out := fmt.Sprintf("%s\n%s DO UPDATE\nSET %s", insert, conflict, strings.Join(sets, ",\n    "))
+	if soft != "" {
+		out += fmt.Sprintf("\nWHERE %s.%s IS NULL", qb.t.Name, soft)
+	}
+	return out + returning + ";\n", nil
 }

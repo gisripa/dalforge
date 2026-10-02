@@ -1,4 +1,4 @@
-// DRAFT: backend-neutral options that turn a protobuf file into a DALForge IDL.
+// Backend-neutral options that turn a protobuf file into a DALForge IDL.
 //
 // Messages annotated with (dal.v1.table) become entities (a Postgres table, a
 // DynamoDB table, ...); fields become columns/attributes. Services annotated
@@ -101,13 +101,16 @@ type Role int32
 
 const (
 	Role_ROLE_UNSPECIFIED Role = 0
-	// Set on insert, never updated.
+	// On a google.protobuf.Timestamp: set to now() on insert, never updated.
 	Role_ROLE_CREATE_TIME Role = 1
-	// Set on insert and on every update.
+	// On a google.protobuf.Timestamp: set to now() on insert and on every
+	// update.
 	Role_ROLE_UPDATE_TIME Role = 2
-	// Soft delete marker: Delete sets it, and reads exclude rows where it is set.
+	// On an optional google.protobuf.Timestamp: soft delete. Delete sets it,
+	// and every generated statement ignores rows where it is set.
 	Role_ROLE_DELETE_TIME Role = 3
-	// Optimistic lock: updates compare-and-swap on it and increment it.
+	// On a required int64 (or int32): optimistic locking. It starts at 1, and
+	// every update is a compare-and-swap on it that increments it.
 	Role_ROLE_VERSION Role = 4
 )
 
@@ -160,10 +163,11 @@ func (Role) EnumDescriptor() ([]byte, []int) {
 type Consistency int32
 
 const (
-	// Eventual: Postgres reads from the reader pool; DynamoDB does an
-	// eventually consistent read.
+	// Unset: eventual.
 	Consistency_CONSISTENCY_UNSPECIFIED Consistency = 0
-	Consistency_CONSISTENCY_EVENTUAL    Consistency = 1
+	// Eventual: Postgres reads from the reader pool, which may lag the writer
+	// slightly; DynamoDB does an eventually consistent read.
+	Consistency_CONSISTENCY_EVENTUAL Consistency = 1
 	// Strong, for read-after-write: Postgres reads from the writer pool;
 	// DynamoDB sets ConsistentRead (not available on secondary indexes).
 	Consistency_CONSISTENCY_STRONG Consistency = 2
@@ -213,10 +217,13 @@ func (Consistency) EnumDescriptor() ([]byte, []int) {
 // Table configures the entity backing a message.
 type Table struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Table name. Defaults to the snake_case message name.
+	// Table name. Defaults to the snake_case message name (HTTPRequestLog
+	// becomes http_request_log). It must be a valid unquoted identifier
+	// (DAL204); a default that's a reserved word, such as order or user, needs
+	// an explicit name.
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// Fields the data is sharded by. Recorded and validated (the fields must
-	// exist); routing and enforcement are out of scope for now.
+	// exist); dalforge doesn't route or enforce it.
 	ShardKey      []string `protobuf:"bytes,2,rep,name=shard_key,json=shardKey,proto3" json:"shard_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -272,18 +279,21 @@ func (x *Table) GetShardKey() []string {
 //
 // To remove a field, delete it and reserve its number and name. Its column is
 // retired, not dropped: schema changes are always additive, so code from the
-// previous release keeps working (see docs/design.md §8).
+// previous release keeps working.
 type Field struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Column name. Defaults to the proto field name.
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	// Refines the proto type. It drives the Go domain type (e.g. uuid.UUID for
-	// a string) and each backend's physical type.
+	// Refines a string field's type: it sets the Go type (e.g. uuid.UUID for
+	// FORMAT_UUID) and the column type.
 	Format Format `protobuf:"varint,2,opt,name=format,proto3,enum=dal.v1.Format" json:"format,omitempty"`
 	// Marks the field as part of the primary key. Multiple fields form a
-	// composite key, ordered by their declaration order in the message.
+	// composite key, ordered by their declaration order in the message. A
+	// FORMAT_UUID key left nil in a create is assigned a UUIDv7.
 	PrimaryKey bool `protobuf:"varint,3,opt,name=primary_key,json=primaryKey,proto3" json:"primary_key,omitempty"`
-	Unique     bool `protobuf:"varint,4,opt,name=unique,proto3" json:"unique,omitempty"`
+	// Makes the column unique. On an entity with ROLE_DELETE_TIME it's unique
+	// among live rows only, so a soft-deleted row doesn't block its value.
+	Unique bool `protobuf:"varint,4,opt,name=unique,proto3" json:"unique,omitempty"`
 	// Behaviour the generated code manages for this column.
 	Role          Role `protobuf:"varint,5,opt,name=role,proto3,enum=dal.v1.Role" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -553,7 +563,8 @@ type Get struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Lookup fields. Defaults to the primary key. Any other set must be
 	// covered by a unique field or unique index.
-	By            []string    `protobuf:"bytes,1,rep,name=by,proto3" json:"by,omitempty"`
+	By []string `protobuf:"bytes,1,rep,name=by,proto3" json:"by,omitempty"`
+	// Which copy of the data the read may use. Defaults to eventual.
 	Consistency   Consistency `protobuf:"varint,2,opt,name=consistency,proto3,enum=dal.v1.Consistency" json:"consistency,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -609,19 +620,23 @@ type List struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Equality filter fields.
 	Eq []string `protobuf:"bytes,1,rep,name=eq,proto3" json:"eq,omitempty"`
-	// Optional range filter field. It must be the leading order_by field.
+	// Optional range filter field. It must be the leading order_by field. The
+	// filter is half-open: the request carries <range>_from (inclusive) and
+	// <range>_to (exclusive), both required.
 	Range string `protobuf:"bytes,2,opt,name=range,proto3" json:"range,omitempty"`
 	// Sort fields, each optionally suffixed with ASC or DESC. When empty, the
 	// sort is inherited from a backend-declared index whose leading fields are
 	// exactly eq; failing that, it is the primary key. The primary key is
 	// always appended as the keyset tie-breaker.
 	OrderBy []string `protobuf:"bytes,3,rep,name=order_by,json=orderBy,proto3" json:"order_by,omitempty"`
-	// Page size limits. Zero means the project default.
-	DefaultPageSize uint32      `protobuf:"varint,4,opt,name=default_page_size,json=defaultPageSize,proto3" json:"default_page_size,omitempty"`
-	MaxPageSize     uint32      `protobuf:"varint,5,opt,name=max_page_size,json=maxPageSize,proto3" json:"max_page_size,omitempty"`
-	Consistency     Consistency `protobuf:"varint,6,opt,name=consistency,proto3,enum=dal.v1.Consistency" json:"consistency,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Page size used when the caller passes 0. Zero here means 50.
+	DefaultPageSize uint32 `protobuf:"varint,4,opt,name=default_page_size,json=defaultPageSize,proto3" json:"default_page_size,omitempty"`
+	// Largest page size; bigger requests are clamped. Zero here means 500.
+	MaxPageSize uint32 `protobuf:"varint,5,opt,name=max_page_size,json=maxPageSize,proto3" json:"max_page_size,omitempty"`
+	// Which copy of the data the read may use. Defaults to eventual.
+	Consistency   Consistency `protobuf:"varint,6,opt,name=consistency,proto3,enum=dal.v1.Consistency" json:"consistency,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *List) Reset() {
@@ -696,7 +711,9 @@ func (x *List) GetConsistency() Consistency {
 	return Consistency_CONSISTENCY_UNSPECIFIED
 }
 
-// Create inserts one row and returns it.
+// Create inserts one row and returns it. Every field of its parameters is a
+// pointer, and nil means the column default, NULL, a new UUIDv7 key, or a
+// missing-field error, depending on the field.
 type Create struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -819,7 +836,9 @@ func (*Delete) Descriptor() ([]byte, []int) {
 	return file_dal_v1_options_proto_rawDescGZIP(), []int{8}
 }
 
-// Upsert inserts one row, or updates it on conflict.
+// Upsert inserts one row, or updates it on conflict. The last writer wins (the
+// version is bumped without a compare-and-swap), and a soft-deleted row is
+// never revived.
 type Upsert struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Conflict target fields. Defaults to the primary key; any other set must

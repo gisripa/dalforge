@@ -1,0 +1,2 @@
+dal104.proto:37:3: error DAL104: rpc GetAccountByName: get.by [name] isn't backed by a unique constraint, so it could match several rows; mark the field unique, add a unique index, or make it a list
+dal104.proto:42:3: error DAL104: rpc UpsertAccountByName: upsert.conflict_on [name] isn't backed by a unique constraint, so it could match several rows; mark the field unique, add a unique index, or make it a list

@@ -1,4 +1,4 @@
-// Example IDL exercising the draft dal.v1 and dal.pg.v1 options. Mirrored in docs/design.md.
+// Example IDL exercising the dal.v1 and dal.pg.v1 options. Mirrored in docs/design.md.
 syntax = "proto3";
 
 package orders.v1;

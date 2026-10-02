@@ -1,0 +1,133 @@
+// List checks: DAL101 (range leads the sort), DAL109 (mutable sort field),
+// DAL114 (naming), DAL115 (nullable sort). The first rpcs are valid controls.
+syntax = "proto3";
+
+package lists;
+
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Order {
+  string id = 1 [(dal.v1.field) = {
+    format: FORMAT_UUID
+    primary_key: true
+  }];
+  string account_id = 2;
+  string state = 3;
+  google.protobuf.Timestamp created_at = 4;
+  optional google.protobuf.Timestamp fulfilled_at = 5;
+  int64 priority = 6;
+}
+
+service OrderStore {
+  option (dal.v1.store) = {entity: "Order"};
+
+  // Valid: the ESR ladder. Names match, "ID" may be dropped, the nullable
+  // range is fine because the range filter excludes NULLs.
+  rpc ListOrdersByState(ByState) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {eq: ["state"]}
+    };
+  }
+  rpc ListOrdersByStateAndFulfilledAt(ByStateRange) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["state"]
+        range: "fulfilled_at"
+      }
+    };
+  }
+  rpc ListOrdersByAccountAndStateAndFulfilledAt(ByAccountStateRange) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["account_id", "state"]
+        range: "fulfilled_at"
+      }
+    };
+  }
+
+  // DAL101: ranging on created_at while sorting by priority.
+  rpc ListOrdersByStateAndCreatedAt(ByStateCreated) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["state"]
+        range: "created_at"
+        order_by: ["priority DESC"]
+      }
+    };
+  }
+  // DAL115: sorting by a nullable field that isn't the range.
+  rpc ListOrdersByAccount(ByAccount) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["account_id"]
+        order_by: ["fulfilled_at DESC"]
+      }
+    };
+  }
+  // DAL114: the name doesn't say it filters by state.
+  rpc RecentOrders(ByState) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["state"]
+        order_by: ["created_at DESC"]
+      }
+    };
+  }
+  // DAL109: priority can change (see Reprioritize) while it sorts a list.
+  rpc ListOrdersByStateByPriority(ByState) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["state"]
+        order_by: ["priority DESC"]
+      }
+    };
+  }
+  rpc Reprioritize(Order) returns (Order) {
+    option (dal.v1.query) = {
+      update: {columns: ["priority"]}
+    };
+  }
+}
+
+message ByState {
+  string state = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ByAccount {
+  string account_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ByStateRange {
+  string state = 1;
+  google.protobuf.Timestamp fulfilled_at_from = 2;
+  google.protobuf.Timestamp fulfilled_at_to = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ByAccountStateRange {
+  string account_id = 1;
+  string state = 2;
+  google.protobuf.Timestamp fulfilled_at_from = 3;
+  google.protobuf.Timestamp fulfilled_at_to = 4;
+  int32 page_size = 5;
+  string page_token = 6;
+}
+
+message ByStateCreated {
+  string state = 1;
+  google.protobuf.Timestamp created_at_from = 2;
+  google.protobuf.Timestamp created_at_to = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message OrderPage {
+  repeated Order orders = 1;
+  string next_page_token = 2;
+}

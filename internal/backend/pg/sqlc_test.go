@@ -80,7 +80,7 @@ func generate(t *testing.T, bin, file string) string {
 // TestSQLCGenerate runs sqlc on the emitted output of each fixture and pins
 // the Go it generates. This is the feedback loop for the SQL side: sqlc must
 // accept every generated query and override, and its Go is what the DAL
-// builds on. No pgtype may appear (design §7).
+// builds on. No pgtype may appear: the generated API exposes no driver types.
 func TestSQLCGenerate(t *testing.T) {
 	bin := sqlcBinary(t)
 	for _, tt := range _fixtures {

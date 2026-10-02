@@ -1,0 +1,1 @@
+dal201.proto:10:1: warning DAL201: table item has 3 indexes (key, unique and list indexes) over its budget of 2; each one adds write cost to every insert. Consolidate list shapes, or raise (dal.pg.v1.table).index_budget

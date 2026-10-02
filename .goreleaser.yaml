@@ -1,0 +1,36 @@
+# GoReleaser config for the dalforge CLI (https://goreleaser.com).
+# Run by .github/workflows/release.yml on a vX.Y.Z tag. Try it locally with
+# `goreleaser release --snapshot --clean` (nothing is published).
+version: 2
+
+project_name: dalforge
+
+builds:
+  - id: dalforge
+    main: ./cmd/dalforge
+    binary: dalforge
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/gisripa/dalforge/internal/pipeline._version=v{{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - formats: [tar.gz]
+    # dalforge_0.1.0_darwin_arm64.tar.gz: the naming mise's github: backend expects.
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE, README.md]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+  filters:
+    exclude: ["^docs:", "^test:", "^ci:"]
+
+release:
+  prerelease: auto # v0.1.0-rc.1 is published as a pre-release

@@ -1,0 +1,1 @@
+dal103.proto:39:3: warning DAL103: rpc ListTagsByOwner has no order_by and sorts by the primary key [code], which isn't time-ordered; pages are stable but in no meaningful order. Declare order_by

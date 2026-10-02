@@ -8,7 +8,8 @@ import (
 
 // emitSQLC renders sqlc.yaml. Every column gets a type override from its
 // GoType, so no pgtype wrapper reaches sqlc's models or parameters: the
-// generated API exposes no driver types (design §7). Written by hand rather
+// generated API exposes no driver types (docs/design.md, "No driver types in
+// the API"). Written by hand rather
 // than with a YAML library: the shape is fixed and the output must be stable.
 func emitSQLC(m *Schema, layout Layout) []byte {
 	var b strings.Builder
@@ -56,10 +57,17 @@ sql:
 
 	nullable, _ := nullableTypes(m)
 	if len(nullable) > 0 {
-		b.WriteString("          # insert parameters (cast, nullable): every field is a pointer\n")
+		// Cast parameters aren't traced to a column, so their type comes from
+		// db_type overrides: nullable casts (insert/update fields) become
+		// pointers, required casts (range bounds, keyset cursors) plain values.
+		b.WriteString("          # cast parameters: nullable → pointer, required → value\n")
 		for _, n := range nullable {
 			fmt.Fprintf(&b, "          - db_type: %s\n            nullable: true\n            go_type:\n", sqlcTypeName(n.dbType))
 			writeGoType(&b, n.goType)
+			value := n.goType
+			value.Pointer = false
+			fmt.Fprintf(&b, "          - db_type: %s\n            go_type:\n", sqlcTypeName(n.dbType))
+			writeGoType(&b, value)
 		}
 	}
 	return []byte(b.String())

@@ -1,0 +1,5 @@
+lists.proto:50:3: error DAL101: rpc ListOrdersByStateAndCreatedAt: range "created_at" must be the leading order_by field (got [priority DESC]); one index can't serve a range on one field and a sort on another
+lists.proto:50:3: warning DAL109: rpc ListOrdersByStateAndCreatedAt sorts by "priority", which rpc Reprioritize can change; rows can move between pages while a client pages through them
+lists.proto:60:3: error DAL115: rpc ListOrdersByAccount: order_by "fulfilled_at" is optional (nullable); keyset paging would skip rows where it is NULL. Make it required, or make it the list's range
+lists.proto:69:3: warning DAL114: rpc RecentOrders: the name doesn't say what it filters by; expected it to contain "ByState", e.g. ListOrdersByState
+lists.proto:78:3: warning DAL109: rpc ListOrdersByStateByPriority sorts by "priority", which rpc Reprioritize can change; rows can move between pages while a client pages through them

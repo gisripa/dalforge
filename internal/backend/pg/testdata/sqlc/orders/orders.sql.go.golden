@@ -6,12 +6,12 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 const orderCreate = `-- name: OrderCreate :one
-
 INSERT INTO orders (id, account_id, status, note, version, created_at, updated_at)
 VALUES ($1::uuid, $2::uuid, COALESCE($3::text, 'pending'), $4::text, 1, now(), now())
 RETURNING id, account_id, status, note, version, created_at, updated_at, deleted_at
@@ -24,8 +24,6 @@ type OrderCreateParams struct {
 	Note      *string
 }
 
-// orders.v1.OrderStore.ListByAccount (list)
-// OrderListByAccount: not generated yet (list queries arrive in phase 2).
 // orders.v1.OrderStore.Create (create)
 func (q *Queries) OrderCreate(ctx context.Context, arg OrderCreateParams) (Order, error) {
 	row := q.db.QueryRow(ctx, orderCreate,
@@ -75,6 +73,22 @@ func (q *Queries) OrderDelete(ctx context.Context, id uuid.UUID) (Order, error) 
 	return i, err
 }
 
+const orderExists = `-- name: OrderExists :one
+SELECT EXISTS (
+  SELECT 1 FROM orders
+  WHERE id = $1
+    AND deleted_at IS NULL
+)
+`
+
+// orders.v1.OrderStore: existence check, used to tell a stale version from a missing row
+func (q *Queries) OrderExists(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, orderExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const orderGetById = `-- name: OrderGetById :one
 
 SELECT id, account_id, status, note, version, created_at, updated_at, deleted_at
@@ -102,10 +116,105 @@ func (q *Queries) OrderGetById(ctx context.Context, id uuid.UUID) (Order, error)
 	return i, err
 }
 
+const orderListByAccount = `-- name: OrderListByAccount :many
+SELECT id, account_id, status, note, version, created_at, updated_at, deleted_at
+FROM orders
+WHERE account_id = $1
+  AND deleted_at IS NULL
+ORDER BY created_at DESC, id DESC
+LIMIT $2::int
+`
+
+type OrderListByAccountParams struct {
+	AccountID uuid.UUID
+	PageLimit int32
+}
+
+// orders.v1.OrderStore.ListByAccount (list)
+func (q *Queries) OrderListByAccount(ctx context.Context, arg OrderListByAccountParams) ([]Order, error) {
+	rows, err := q.db.Query(ctx, orderListByAccount, arg.AccountID, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Order
+	for rows.Next() {
+		var i Order
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.Status,
+			&i.Note,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const orderListByAccountAfter = `-- name: OrderListByAccountAfter :many
+SELECT id, account_id, status, note, version, created_at, updated_at, deleted_at
+FROM orders
+WHERE account_id = $1
+  AND deleted_at IS NULL
+  AND (created_at, id) < ($2::timestamptz, $3::uuid)
+ORDER BY created_at DESC, id DESC
+LIMIT $4::int
+`
+
+type OrderListByAccountAfterParams struct {
+	AccountID      uuid.UUID
+	AfterCreatedAt time.Time
+	AfterID        uuid.UUID
+	PageLimit      int32
+}
+
+func (q *Queries) OrderListByAccountAfter(ctx context.Context, arg OrderListByAccountAfterParams) ([]Order, error) {
+	rows, err := q.db.Query(ctx, orderListByAccountAfter,
+		arg.AccountID,
+		arg.AfterCreatedAt,
+		arg.AfterID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Order
+	for rows.Next() {
+		var i Order
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.Status,
+			&i.Note,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const orderUpdateStatus = `-- name: OrderUpdateStatus :one
 UPDATE orders
-SET status = $1,
-    note = $2,
+SET status = $1::text,
+    note = $2::text,
     updated_at = now(),
     version = version + 1
 WHERE id = $3
@@ -115,7 +224,7 @@ RETURNING id, account_id, status, note, version, created_at, updated_at, deleted
 `
 
 type OrderUpdateStatusParams struct {
-	Status  string
+	Status  *string
 	Note    *string
 	ID      uuid.UUID
 	Version int64

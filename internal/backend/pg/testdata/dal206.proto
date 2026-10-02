@@ -1,0 +1,55 @@
+// DAL206 (info): lists on the same eq fields with different sorts each need an index.
+syntax = "proto3";
+
+package dal206;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Ticket {
+  string id = 1 [(dal.v1.field) = {primary_key: true, format: FORMAT_UUID}];
+  string queue = 2;
+  int32 priority = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message ByQueue {
+  string queue = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message TicketPage {
+  repeated Ticket tickets = 1;
+  string next_page_token = 2;
+}
+
+service TicketStore {
+  option (dal.v1.store) = {entity: "Ticket"};
+  rpc ListTicketsByQueueNewest(ByQueue) returns (TicketPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["queue"]
+        order_by: ["created_at DESC"]
+      }
+    };
+  }
+  rpc ListTicketsByQueuePriority(ByQueue) returns (TicketPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["queue"]
+        order_by: ["priority DESC"]
+      }
+    };
+  }
+  // Control: the first sort read backwards shares its index.
+  rpc ListTicketsByQueueOldest(ByQueue) returns (TicketPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["queue"]
+        order_by: ["created_at"]
+      }
+    };
+  }
+}

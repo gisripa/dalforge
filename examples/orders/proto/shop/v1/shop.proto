@@ -1,0 +1,185 @@
+// The IDL of a small shop: accounts and their orders. dalforge turns the
+// access patterns below into a schema, sqlc queries and a typed Go DAL.
+syntax = "proto3";
+
+package shop.v1;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+option (dal.pg.v1.file) = {min_version: 16};
+
+message Account {
+  option (dal.v1.table) = {name: "accounts"};
+
+  string id = 1 [(dal.v1.field) = {
+    format: FORMAT_UUID
+    primary_key: true
+  }];
+  string email = 2 [(dal.v1.field).unique = true];
+  string name = 3;
+  google.protobuf.Timestamp created_at = 4 [(dal.v1.field).role = ROLE_CREATE_TIME];
+}
+
+message Order {
+  option (dal.v1.table) = {
+    name: "orders"
+    shard_key: ["account_id"]
+  };
+
+  string id = 1 [(dal.v1.field) = {
+    format: FORMAT_UUID
+    primary_key: true
+  }];
+  // References Account.id. There's no foreign key: the app checks it.
+  string account_id = 2 [(dal.v1.field).format = FORMAT_UUID];
+  string status = 3 [(dal.pg.v1.column).default = "'pending'"];
+  int64 amount_cents = 4;
+  optional string note = 5;
+  int64 version = 6 [(dal.v1.field).role = ROLE_VERSION];
+  google.protobuf.Timestamp created_at = 7 [(dal.v1.field).role = ROLE_CREATE_TIME];
+  google.protobuf.Timestamp updated_at = 8 [(dal.v1.field).role = ROLE_UPDATE_TIME];
+  optional google.protobuf.Timestamp deleted_at = 9 [(dal.v1.field).role = ROLE_DELETE_TIME];
+}
+
+service AccountStore {
+  option (dal.v1.store) = {entity: "Account"};
+
+  rpc CreateAccount(Account) returns (Account) {
+    option (dal.v1.query) = {
+      create: {}
+    };
+  }
+  rpc GetAccount(AccountKey) returns (Account) {
+    option (dal.v1.query) = {
+      get: {}
+    };
+  }
+  rpc GetAccountByEmail(EmailKey) returns (Account) {
+    option (dal.v1.query) = {
+      get: {by: ["email"]}
+    };
+  }
+  // Insert, or update the name of the account with this email.
+  rpc UpsertAccountByEmail(Account) returns (Account) {
+    option (dal.v1.query) = {
+      upsert: {
+        conflict_on: ["email"]
+        columns: ["name"]
+      }
+    };
+  }
+}
+
+service OrderStore {
+  option (dal.v1.store) = {entity: "Order"};
+
+  rpc CreateOrder(Order) returns (Order) {
+    option (dal.v1.query) = {
+      create: {}
+    };
+  }
+  rpc GetOrder(OrderKey) returns (Order) {
+    option (dal.v1.query) = {
+      get: {}
+    };
+  }
+  rpc UpdateOrderStatus(Order) returns (Order) {
+    option (dal.v1.query) = {
+      update: {columns: ["status", "note"]}
+    };
+  }
+  rpc DeleteOrder(OrderKey) returns (Order) {
+    option (dal.v1.query) = {
+      delete: {}
+    };
+  }
+
+  // The ESR ladder: each filter combination is its own rpc, and dalforge
+  // derives the index each one needs (equality fields first, then the
+  // range/sort field, then the key as tie-breaker). See schema/schema.sql.
+
+  // An account's order history, newest first.
+  rpc ListOrdersByAccount(ByAccount) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["account_id"]
+        order_by: ["created_at DESC"]
+      }
+    };
+  }
+  // Orders in a status, newest first.
+  rpc ListOrdersByStatus(ByStatus) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["status"]
+        order_by: ["created_at DESC"]
+      }
+    };
+  }
+  // Orders in a status, within a time window (oldest first).
+  rpc ListOrdersByStatusAndCreatedAt(ByStatusInWindow) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["status"]
+        range: "created_at"
+      }
+    };
+  }
+  // One account's orders in a status, within a time window.
+  rpc ListOrdersByAccountAndStatusAndCreatedAt(ByAccountStatusInWindow) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["account_id", "status"]
+        range: "created_at"
+      }
+    };
+  }
+}
+
+message AccountKey {
+  string id = 1;
+}
+
+message EmailKey {
+  string email = 1;
+}
+
+message OrderKey {
+  string id = 1;
+}
+
+message ByAccount {
+  string account_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ByStatus {
+  string status = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ByStatusInWindow {
+  string status = 1;
+  google.protobuf.Timestamp created_at_from = 2;
+  google.protobuf.Timestamp created_at_to = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ByAccountStatusInWindow {
+  string account_id = 1;
+  string status = 2;
+  google.protobuf.Timestamp created_at_from = 3;
+  google.protobuf.Timestamp created_at_to = 4;
+  int32 page_size = 5;
+  string page_token = 6;
+}
+
+message OrderPage {
+  repeated Order orders = 1;
+  string next_page_token = 2;
+}

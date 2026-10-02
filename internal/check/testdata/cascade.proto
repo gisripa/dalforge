@@ -1,0 +1,33 @@
+// A typo in list.eq: the request still has the intended field. Only the
+// typo (DAL117) should be reported, not a follow-on DAL107.
+syntax = "proto3";
+
+package cascade;
+
+import "dal/v1/options.proto";
+
+message Order {
+  string id = 1 [(dal.v1.field).primary_key = true];
+  string account_id = 2;
+}
+
+service OrderStore {
+  option (dal.v1.store) = {entity: "Order"};
+
+  rpc ListByAccount(ListByAccountRequest) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {eq: ["acount_id"]}
+    };
+  }
+}
+
+message ListByAccountRequest {
+  string account_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message OrderPage {
+  repeated Order orders = 1;
+  string next_page_token = 2;
+}

@@ -1,0 +1,48 @@
+// DAL201 (warning): a table's indexes exceed its budget.
+syntax = "proto3";
+
+package dal201;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Item {
+  option (dal.pg.v1.table) = {index_budget: 2};
+
+  string id = 1 [(dal.v1.field) = {primary_key: true, format: FORMAT_UUID}];
+  string a = 2;
+  string b = 3;
+}
+
+message ByA {
+  string a = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ByB {
+  string b = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ItemPage {
+  repeated Item items = 1;
+  string next_page_token = 2;
+}
+
+service ItemStore {
+  option (dal.v1.store) = {entity: "Item"};
+  // The key and two list indexes: 3 over a budget of 2.
+  rpc ListItemsByA(ByA) returns (ItemPage) {
+    option (dal.v1.query) = {
+      list: {eq: ["a"]}
+    };
+  }
+  rpc ListItemsByB(ByB) returns (ItemPage) {
+    option (dal.v1.query) = {
+      list: {eq: ["b"]}
+    };
+  }
+}

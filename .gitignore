@@ -4,3 +4,7 @@ coverage.out
 .DS_Store
 mise.local.toml
 /.claude/plans/
+.vscode
+
+# GoReleaser output
+/dist/

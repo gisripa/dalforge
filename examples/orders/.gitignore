@@ -1,0 +1,5 @@
+# Everything dalforge and sqlc generate. Run `dalforge generate` to recreate.
+/schema/
+/queries/generated/
+/sqlc.yaml
+/gen/

@@ -8,7 +8,8 @@ import (
 	"github.com/gisripa/dalforge/internal/ir"
 )
 
-// sqlType is the default SQL type of a non-repeated field (design §4).
+// sqlType is the default SQL type of a non-repeated field (docs/design.md,
+// "Type mapping (Postgres)").
 func sqlType(f *ir.Field) (string, error) {
 	if f.Format != ir.FormatNone && f.Kind != ir.KindString {
 		return "", fmt.Errorf("format %s applies only to string fields, not %s", f.Format, f.Kind)
@@ -41,7 +42,7 @@ func sqlType(f *ir.Field) (string, error) {
 	case ir.KindTimestamp:
 		return "timestamptz", nil
 	case ir.KindEnum:
-		return "text", nil // stored by value name (design §4)
+		return "text", nil // stored by value name: readable, and survives renumbering
 	case ir.KindJSON:
 		return "jsonb", nil
 	}
@@ -85,7 +86,8 @@ func goType(f *ir.Field) GoType {
 		case ir.FormatJSON:
 			g = GoType{Import: "encoding/json", Name: "RawMessage"}
 		}
-		// FormatDecimal stays string until a decimal type is chosen (design §4).
+		// FormatDecimal stays a string: exact both ways and dependency-free. A
+		// decimal library is opt-in per column with custom_type + go_type.
 	case ir.KindBool:
 		g = GoType{Name: "bool"}
 	case ir.KindInt32:
@@ -173,5 +175,5 @@ func customBase(t string) string {
 // _minVersion is the capability table: the Postgres major version that
 // introduced each SQL type dalforge can emit. Types absent from the table are
 // available in every supported version. Supporting a newer version adds
-// rows here; the IDL never changes (design §4).
+// rows here; the IDL never changes.
 var _minVersion = map[string]int{}

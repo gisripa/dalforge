@@ -97,6 +97,27 @@
       "primary_key": [
         "id"
       ],
+      "indexes": [
+        {
+          "name": "orders_account_id_created_at_id_idx",
+          "columns": [
+            {
+              "column": "account_id"
+            },
+            {
+              "column": "created_at"
+            },
+            {
+              "column": "id"
+            }
+          ],
+          "where": "deleted_at IS NULL",
+          "derived": true,
+          "for": [
+            "ListByAccount"
+          ]
+        }
+      ],
       "index_budget": 4,
       "pos": {
         "file": "orders/v1/orders.proto",
@@ -104,5 +125,23 @@
         "col": 1
       }
     }
-  ]
+  ],
+  "paths": {
+    "OrderStore.ListByAccount": {
+      "eq": [
+        "account_id"
+      ],
+      "keys": [
+        {
+          "field": "created_at",
+          "desc": true
+        },
+        {
+          "field": "id",
+          "desc": true
+        }
+      ],
+      "index": "orders_account_id_created_at_id_idx"
+    }
+  }
 }

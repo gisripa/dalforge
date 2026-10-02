@@ -6,8 +6,11 @@ package defaultsdal
 
 import (
 	"context"
+	"time"
 
 	"example.com/dalforgefixture/gen/sqlcdb"
+	"github.com/gisripa/dalforge/dal"
+	"github.com/google/uuid"
 )
 
 // Item is the defaults.v1.Item entity, stored in table item.
@@ -16,8 +19,52 @@ type Item = sqlcdb.Item
 // ItemGetItemParams are the parameters of Item.GetItem.
 type ItemGetItemParams = sqlcdb.ItemGetItemParams
 
+// ItemListItemsByTenantParams are the parameters of Item.ListItemsByTenant: the filters, plus paging.
+// An empty PageToken asks for the first page; PageSize 0 means the default.
+type ItemListItemsByTenantParams struct {
+	TenantID  uuid.UUID
+	PageSize  int32
+	PageToken string
+}
+
+// WithPageToken returns p asking for the page at token, for dal.All.
+func (p ItemListItemsByTenantParams) WithPageToken(token string) ItemListItemsByTenantParams {
+	p.PageToken = token
+	return p
+}
+
+// ItemListItemsByTenantAndCreatedAtParams are the parameters of Item.ListItemsByTenantAndCreatedAt: the filters, plus paging.
+// An empty PageToken asks for the first page; PageSize 0 means the default.
+type ItemListItemsByTenantAndCreatedAtParams struct {
+	TenantID      uuid.UUID
+	CreatedAtFrom time.Time
+	CreatedAtTo   time.Time
+	PageSize      int32
+	PageToken     string
+}
+
+// WithPageToken returns p asking for the page at token, for dal.All.
+func (p ItemListItemsByTenantAndCreatedAtParams) WithPageToken(token string) ItemListItemsByTenantAndCreatedAtParams {
+	p.PageToken = token
+	return p
+}
+
+// ItemListItemsByTenantNewestParams are the parameters of Item.ListItemsByTenantNewest: the filters, plus paging.
+// An empty PageToken asks for the first page; PageSize 0 means the default.
+type ItemListItemsByTenantNewestParams struct {
+	TenantID  uuid.UUID
+	PageSize  int32
+	PageToken string
+}
+
+// WithPageToken returns p asking for the page at token, for dal.All.
+func (p ItemListItemsByTenantNewestParams) WithPageToken(token string) ItemListItemsByTenantNewestParams {
+	p.PageToken = token
+	return p
+}
+
 // ItemCreateItemParams are the parameters of Item.CreateItem.
-// Every field is a pointer; nil means:
+// Fields to write are pointers; nil means:
 //   - TenantID: a new UUIDv7
 //   - ID: a new UUIDv7
 //   - Sku: an error (required)
@@ -26,7 +73,29 @@ type ItemGetItemParams = sqlcdb.ItemGetItemParams
 type ItemCreateItemParams = sqlcdb.ItemCreateItemParams
 
 // ItemUpdateItemParams are the parameters of Item.UpdateItem.
+// Fields to write are pointers; nil means:
+//   - Sku: an error (required)
+//   - Name: an error (required)
+//   - Color: set NULL
 type ItemUpdateItemParams = sqlcdb.ItemUpdateItemParams
+
+// ItemUpsertItemParams are the parameters of Item.UpsertItem.
+// Fields to write are pointers; nil means:
+//   - TenantID: a new UUIDv7
+//   - ID: a new UUIDv7
+//   - Sku: an error (required)
+//   - Name: an error (required)
+//   - Color: NULL
+type ItemUpsertItemParams = sqlcdb.ItemUpsertItemParams
+
+// ItemUpsertItemBySkuParams are the parameters of Item.UpsertItemBySku.
+// Fields to write are pointers; nil means:
+//   - TenantID: a new UUIDv7
+//   - ID: a new UUIDv7
+//   - Sku: an error (required)
+//   - Name: an error (required)
+//   - Color: NULL
+type ItemUpsertItemBySkuParams = sqlcdb.ItemUpsertItemBySkuParams
 
 // ItemDeleteItemParams are the parameters of Item.DeleteItem.
 type ItemDeleteItemParams = sqlcdb.ItemDeleteItemParams
@@ -39,11 +108,14 @@ type ItemReadRepository interface {
 	// GetItemBySku implements defaults.v1.ItemStore.GetItemBySku (get).
 	GetItemBySku(ctx context.Context, sku string) (Item, error)
 
-	// ListItemsByTenant (list) arrives in phase 2.
+	// ListItemsByTenant implements defaults.v1.ItemStore.ListItemsByTenant (list).
+	ListItemsByTenant(ctx context.Context, p ItemListItemsByTenantParams) (dal.Page[Item], error)
 
-	// ListItemsByTenantAndCreatedAt (list) arrives in phase 2.
+	// ListItemsByTenantAndCreatedAt implements defaults.v1.ItemStore.ListItemsByTenantAndCreatedAt (list).
+	ListItemsByTenantAndCreatedAt(ctx context.Context, p ItemListItemsByTenantAndCreatedAtParams) (dal.Page[Item], error)
 
-	// ListItemsByTenantNewest (list) arrives in phase 2.
+	// ListItemsByTenantNewest implements defaults.v1.ItemStore.ListItemsByTenantNewest (list).
+	ListItemsByTenantNewest(ctx context.Context, p ItemListItemsByTenantNewestParams) (dal.Page[Item], error)
 }
 
 // ItemWriteRepository holds the write access patterns of defaults.v1.ItemStore.
@@ -54,9 +126,11 @@ type ItemWriteRepository interface {
 	// UpdateItem implements defaults.v1.ItemStore.UpdateItem (update).
 	UpdateItem(ctx context.Context, p ItemUpdateItemParams) (Item, error)
 
-	// UpsertItem (upsert) arrives in phase 2.
+	// UpsertItem implements defaults.v1.ItemStore.UpsertItem (upsert).
+	UpsertItem(ctx context.Context, p ItemUpsertItemParams) (Item, error)
 
-	// UpsertItemBySku (upsert) arrives in phase 2.
+	// UpsertItemBySku implements defaults.v1.ItemStore.UpsertItemBySku (upsert).
+	UpsertItemBySku(ctx context.Context, p ItemUpsertItemBySkuParams) (Item, error)
 
 	// DeleteItem implements defaults.v1.ItemStore.DeleteItem (delete).
 	DeleteItem(ctx context.Context, p ItemDeleteItemParams) (Item, error)

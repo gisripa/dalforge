@@ -1,4 +1,4 @@
-// DRAFT: Postgres backend options. These refine the physical schema only; the
+// Postgres backend options. These refine the physical schema only; the
 // entity and its access patterns are declared with dal.v1 and stay
 // backend-neutral. Every option here is optional.
 //
@@ -48,8 +48,9 @@ message Table {
   // that List queries without order_by inherit.
   repeated Index indexes = 1;
 
-  // Overrides the per-table index budget used by the write-amplification
-  // lint. Zero means the project default.
+  // How many indexes (the primary key, unique columns and list indexes) the
+  // table may have before DAL201 warns: each one adds write cost. Zero means
+  // the default, 5.
   uint32 index_budget = 2;
 }
 
@@ -66,19 +67,25 @@ message Index {
   // Non-key fields stored in the index (INCLUDE) for index-only scans.
   repeated string include = 3;
 
-  // Predicate for a partial index, as a SQL boolean expression.
+  // Predicate for a partial index, as a SQL boolean expression. A list uses
+  // a partial index only if this is exactly its own filter
+  // (deleted_at IS NULL); otherwise it's for custom queries.
   string where = 4;
 
+  // Makes the index unique. A unique index can back a get.by or an
+  // upsert.conflict_on on its columns (DAL104).
   bool unique = 5;
 }
 
 // Column refines the Postgres column.
 message Column {
   // Physical type. When unset it is inferred from the proto type and the
-  // dal.v1 format; see docs/design.md for the mapping.
+  // dal.v1 format (see Types in the manual).
   oneof pg_type {
+    // A first-class Postgres type. Only types that fit the field's proto type
+    // are allowed (DAL209), since the Go type follows the proto type.
     Type type = 1;
-    // Raw type for anything Type does not cover yet (extension types such as
+    // Raw type for anything Type doesn't cover (extension types such as
     // vector(1536), or parameterised types such as numeric(12,2)).
     string custom_type = 2;
   }
@@ -88,7 +95,7 @@ message Column {
 
   // Go type for a custom_type column, as "import/path.Type", e.g.
   // "github.com/pgvector/pgvector-go.Vector". It's passed to sqlc as a type
-  // override and used in the domain struct. Required with custom_type.
+  // override and becomes the model field's type. Required with custom_type.
   string go_type = 4;
 }
 

@@ -1,0 +1,11 @@
+# dalforge.lock: maintained by dalforge, do not edit. Commit it.
+# Update it with `dalforge lock -upgrade` after changing dalforge or sqlc.
+lock_version = 1
+dalforge = "v0.3.1"
+
+[options]
+"dal/pg/v1/options.proto" = "sha256:bb"
+"dal/v1/options.proto" = "sha256:aa"
+
+[tools]
+"sqlc" = "v1.31.1"

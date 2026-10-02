@@ -12,3 +12,6 @@ CREATE TABLE orders (
     deleted_at timestamptz,
     PRIMARY KEY (id)
 );
+
+-- derived for: ListByAccount
+CREATE INDEX orders_account_id_created_at_id_idx ON orders (account_id, created_at, id) WHERE deleted_at IS NULL;

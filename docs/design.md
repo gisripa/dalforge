@@ -204,30 +204,54 @@ sqlc = "1.30.0"
 **Behaviour:**
 - **Creation:** `dalforge generate` writes the lock if it's missing.
 - **Mismatch:** if the running binary's version or bundled options hashes
-  differ from the lock, `generate`, `lint` and `migrate` fail. `dalforge lock
+  (or, for `generate`, the sqlc version) differ from the lock, `generate`
+  and `lint` fail, naming each difference. `dalforge lock
   -upgrade` is the explicit way forward, and the lock change shows up in
   review. A teammate or CI job with a different dalforge can't silently
   regenerate different code.
 - **Vendored copies:** copies of the options protos kept for editor or buf
   tooling are checked against the lock's hashes (`DAL116`).
-- **Distribution:** dalforge is meant to be installed with mise's `go:`
-  backend, pinned in the consuming repo's `mise.toml`:
+- **Distribution (decided 2026-10-02):** a `vX.Y.Z` tag runs CI, then
+  GoReleaser publishes linux/darwin × amd64/arm64 binaries with checksums to
+  GitHub Releases (`.goreleaser.yaml`, `.github/workflows/release.yml`).
+  Consumers pin it in their `mise.toml`, either as a prebuilt binary or built
+  from source:
 
   ```toml
   [tools]
-  "go:github.com/gisripa/dalforge/cmd/dalforge" = "0.3.1"
+  "github:gisripa/dalforge" = "0.3.1"
+  # or: "go:github.com/gisripa/dalforge/cmd/dalforge" = "0.3.1"
   ```
+- **The runtime is its own module (decided 2026-10-02):**
+  `github.com/gisripa/dalforge/dal` (packages `dal`, `dal/dalpg`) has its own
+  `go.mod`, so importing it doesn't pull the generator's dependencies
+  (protocompile, yaml, protobuf) into a user's module graph. It's released in
+  lockstep: the release workflow tags `dal/vX.Y.Z` on the same commit as
+  `vX.Y.Z`, and users use the same version for both. The root module never
+  imports the runtime (generated code names it only as a string), so it needs
+  no `replace` directive, which `go install …@version` would reject.
 
   The version lives in `mise.toml`, not the user's `go.mod`, so `go.sum`
   never pins it. That's why dalforge needs its own lock. The lock is still
   install-agnostic, so a release binary or Homebrew install is checked the
   same way.
-- **Version detection:** `go install` stamps the module version into the
-  binary, and dalforge reads it with `debug.ReadBuildInfo()` (no ldflags). A
-  local build reports `(devel)`. The lock check then warns instead of failing,
-  so work on dalforge itself isn't blocked.
-- **No cgo:** dalforge must stay pure Go, because `go install` compiles on the
-  user's machine and cgo would require a C toolchain and slow installs. Its
+- **Version detection:** release binaries get the version through ldflags
+  (`internal/pipeline._version`); `go install …@v0.3.1` stamps it into the
+  build info, which dalforge reads with `debug.ReadBuildInfo()` otherwise.
+  `dalforge version` prints it.
+  - **Local builds** are recorded as `(devel)` and only warn on a mismatch, so
+    work on dalforge itself isn't blocked. That includes the pseudo-versions
+    Go stamps on builds from a git checkout
+    (`v0.0.0-20261002040003-851063fe8fa3+dirty`), which change with every
+    commit and would otherwise make the lock churn.
+  - **`dalforge lock`** shows whether the lock matches; `dalforge lock
+    -upgrade` rewrites it.
+  - **Option hashes** cover each options file's descriptor without source
+    info, so a vendored source copy and the embedded descriptor hash
+    identically. A stale vendored copy is a DAL116 *warning*: generation
+    continues with the bundled options.
+- **No cgo:** dalforge must stay pure Go, so `go install` works without a C
+  toolchain and release binaries cross-compile (`CGO_ENABLED=0`). Its
   current dependencies (protocompile, pgx) are pure Go, and any new dependency
   has to be too.
 
@@ -373,18 +397,25 @@ comes from the core layer and is the same for every backend.
 |---|---|---|
 | `string` | `text` | `string` |
 | `string` + `FORMAT_UUID` | `uuid` | `uuid.UUID` |
-| `string` + `FORMAT_DECIMAL` | `numeric` | `string` (decimal library TBD) |
+| `string` + `FORMAT_DECIMAL` | `numeric` | `string`: exact, verified round trip (a 30-digit value and NULL), no dependency |
 | `string` + `FORMAT_JSON` | `jsonb` | `json.RawMessage` |
 | `bool` | `boolean` | `bool` |
 | `int32`, `sint32`, `sfixed32` | `integer` | `int32` |
-| `int64`, `sint64`, `sfixed64`, `uint32` | `bigint` | `int64` |
+| `int64`, `sint64`, `sfixed64`, `uint32`, `fixed32` | `bigint` | `int64` |
 | `uint64` | lint error; requires `custom_type` | — |
 | `float` / `double` | `real` / `double precision` | `float32` / `float64` |
 | `bytes` | `bytea` | `[]byte` |
 | `google.protobuf.Timestamp` | `timestamptz` | `time.Time` |
-| enum | `text` (value name) | a generated string type |
+| enum | `text` (value name, by convention) | `string` (no generated constants or validation yet) |
 | repeated scalar | `<type>[]` | `[]T` |
 | message, map, `google.protobuf.Struct` | `jsonb` | `json.RawMessage` |
+
+**Decimals (decided 2026-10-01)** default to `string`. A project that wants
+a decimal library opts in per column with `custom_type: "numeric(12, 2)"` +
+`go_type: "github.com/shopspring/decimal.Decimal"`. Insert parameters are
+typed per SQL type, so all `numeric` columns then share that Go type (DAL213).
+For money, the manual recommends `int64` minor units (cents), as the example
+does.
 
 `optional` fields become pointers (`*T`) in the model struct, via the
 generated sqlc type overrides (no `pgtype` wrappers). The Go type follows the
@@ -553,7 +584,8 @@ For Postgres, an access path becomes the B-tree index `(eq..., sort..., pk...)`:
 ```
 list: {eq: ["account_id"] order_by: ["created_at DESC"]}
   → CREATE INDEX orders_account_id_created_at_id_idx
-      ON orders (account_id, created_at DESC, id DESC) WHERE deleted_at IS NULL;
+      ON orders (account_id, created_at, id) WHERE deleted_at IS NULL;
+    (stored ascending; the newest-first list reads it backwards)
 ```
 
 ### Where the sort order comes from
@@ -568,10 +600,19 @@ timestamp wins" rule. It resolves in this order:
    an explicit index has leading columns exactly equal to the `eq` set (in any
    order), that index's remaining columns become the sort. For Postgres that's
    a `(dal.pg.v1.table).indexes` entry. Use this when several List rpcs share
-   one index.
+   one index. The sort is marked `Source: inherited`, and that explicit index
+   serves the list: no derived index is added next to it, even though it
+   lacks the key tie-breakers (Postgres sorts the rare ties with an
+   incremental sort, which is cheaper than a second near-identical index).
 4. **The primary key.** It's deterministic, and it produces lint `DAL103` if the
-   key isn't time-ordered, e.g. a random UUIDv4 rather than UUIDv7 or a
-   sequence. The results are stable but meaningless to users.
+   key isn't time-ordered. Time-ordered means a `FORMAT_UUID` key (dalforge
+   assigns UUIDv7) or an integer; key fields pinned by `eq` are skipped, so
+   `(tenant_id, id)` listed by `tenant_id` is judged by `id` alone. The
+   results are stable but meaningless to users otherwise.
+
+Whatever the source, the **keyset** is the sort keys followed by the key
+fields not already sorted or pinned by `eq`, as tie-breakers in the
+direction of the last sort key, so a single row comparison covers them.
 
 ### Get
 
@@ -581,13 +622,31 @@ otherwise it's lint error `DAL104`. A non-unique lookup is a List.
 
 ### Postgres index merging and budget
 
-- **Prefix merging:** derived indexes are deduplicated when one index's full
-  column list, sort included, is a prefix of another's with compatible
-  directions. A pure-equality need such as `get.by` on `account_id`, or an
-  existence check, is served by `(account_id, created_at DESC, id DESC)`. A
-  List on `account_id` sorted by `id` is not: it needs `(account_id, id)`.
-- **Equality order:** equality columns are reordered to maximise sharing, since
-  their order inside the equality prefix doesn't affect correctness.
+- **Derived index shape:** `(eq…, sort…, key tie-breakers)`, partial on
+  `deleted_at IS NULL` for soft-delete tables, plus `range IS NOT NULL` for a
+  nullable range column. The name spells out the columns and directions
+  (`orders_status_created_at_id_idx`), and `schema.sql` notes the rpcs each
+  derived index serves (`-- derived for: …`).
+- **Canonical direction (decided 2026-10-02):** a derived index is stored with
+  its first sort column ascending (the rest flipped with it); B-trees scan
+  both ways. Lists sorting opposite ways then derive the identical index, so
+  an index's shape and name depend only on its columns, never on rpc
+  declaration order: adding or reordering other lists can't rename a
+  deployed index. Pinned by `TestDerivedIndexesIgnoreDeclarationOrder`. The
+  only remaining identity change is legitimate: a new, longer index
+  absorbing a shorter one.
+- **Prefix merging:** a derived index is dropped when another index (the
+  primary key, an explicit index, or a longer derived one) starts with the
+  same columns in the same directions or all reversed. B-trees scan both
+  ways, so `ListOrdersByStatus` (`created_at DESC`) and
+  `ListOrdersByStatusAndCreatedAt` (`created_at` ascending) share one index.
+  The direction of equality columns never matters. A predicate must match, or
+  the covering index must have none. A List on `account_id` sorted by `id`
+  is not served by `(account_id, created_at, id)`: it needs
+  `(account_id, id)`.
+- **Equality order (planned):** reordering equality columns to maximise
+  sharing, since their order inside the equality prefix doesn't affect
+  correctness. Today they keep the `eq` order.
 - **Budget:** each table has an index budget (project default 5, overridable
   with `(dal.pg.v1.table).index_budget`), counting the primary key and unique
   indexes. Going over it produces lint warning `DAL201`, because every index
@@ -610,7 +669,8 @@ Core (every backend):
 | DAL115 | error | a nullable column is in `order_by` without also being the `range` column |
 | DAL117 | error | a query reference (`by`, `eq`, `range`, `order_by`, `columns`, `conflict_on`) names a missing or repeated field; a column name used by mistake gets a hint |
 | DAL118 | error | `update`/`upsert` `columns` sets a key field or a role-managed field |
-| DAL116 | error | a vendored copy of the options protos differs from the hashes in `dalforge.lock` |
+| DAL119 | error | a role on the wrong field type (time roles: Timestamp; `ROLE_DELETE_TIME`: optional Timestamp; `ROLE_VERSION`: required int32/int64), on a key or repeated field, or two fields with one role |
+| DAL116 | warning | a vendored copy of the options protos (under a proto root) differs from the options bundled in the binary, which are the ones dalforge uses |
 
 Postgres:
 
@@ -623,7 +683,7 @@ Postgres:
 | DAL205 | error | two rpcs generate the same sqlc query name (`<Store minus "Store"><Method>`, e.g. stores `Order` and `OrderStore` both give `OrderGet`), or a generated name collides with a custom sqlc query |
 | DAL213 | error | two columns of the same SQL type need different Go types (e.g. `numeric` as `string` and as `decimal.Decimal`). sqlc's nullable insert-parameter overrides are per type, so give them the same `go_type` |
 | DAL214 | error | a table needs a sqlc rename (its name differs from the message name) but some column has the same name; sqlc's global rename would rename that column's field too |
-| DAL206 | info | two List rpcs share an equality prefix but sort differently; aligning `order_by` would let them share one index |
+| DAL206 | info | two List rpcs share an equality prefix but sort differently (and not as exact reverses); aligning `order_by` would let them share one index. Skipped for a list that already fails DAL202 |
 | DAL207 | error | the deploy target (`dalforge.yaml` `pg.version`) is older than `min_version`, or a type/feature in use needs a newer version |
 | DAL208 | error | a `custom_type` has no (or an invalid) `go_type`, a `go_type` is set without `custom_type`, or a known extension type (`vector`, `geometry`, `citext`, …) is used without declaring its extension in the file's `(dal.pg.v1.file).extensions` |
 | DAL209 | error | no or incompatible type mapping: `uint64` without `custom_type`, a `format` on a non-string field, or an explicit pg `type` that doesn't fit the field's kind (e.g. `uuid` on `int64`) |
@@ -658,10 +718,25 @@ Every List is keyset-paginated. `OFFSET` is never generated.
   about correctness, not security.
 - **Page size:** `page_size` may change between calls. It's clamped to
   `max_page_size`, falling back to `default_page_size`.
-- **Consistency under concurrent writes:** there are no duplicates and no
-  skips for rows whose sort columns don't change. Rows inserted behind the
-  cursor aren't seen; rows inserted ahead of it are. If a sort column is
-  mutable, rows can move between pages, hence lint `DAL109`.
+- **Consistency under concurrent writes: no snapshot.** Each page is its
+  own statement (READ COMMITTED on Postgres), so an iteration doesn't see the
+  table as of one moment. A snapshot would need a transaction held open
+  across requests, or an exported snapshot / time-travel read, none of which
+  fit stateless page tokens. What keyset pagination does guarantee:
+
+  | Row during the iteration | Outcome |
+  |---|---|
+  | present throughout, sort columns unchanged | returned **exactly once**: no duplicates, no skips |
+  | inserted, sorting behind the cursor | not returned (newest-first lists: new rows land here) |
+  | inserted, sorting ahead of the cursor | returned |
+  | deleted (or soft-deleted) | returned only if its page was already read |
+  | sort column changed | may be returned twice or not at all (lint `DAL109`) |
+
+  OFFSET pagination can't give even the first row of this table: an insert
+  or delete before the offset shifts every later page, which is why dalforge
+  never generates it. A caller that truly needs a consistent snapshot
+  (exports, reconciliation) writes a custom query and reads in one
+  `REPEATABLE READ` transaction.
 
 Envelope: `{"v":1,"q":"<shape hash>","f":"<filter hash>","k":<backend payload>}`.
 The core `dal` package owns the envelope, the hashing and the base64 encoding.
@@ -669,19 +744,42 @@ Each backend only encodes and decodes `k`.
 
 ### Postgres payload
 
-`k` is the last row's sort tuple plus its primary key. For
+`k` is the last row's keyset: the sort tuple plus the key tie-breakers. Each
+List is two sqlc queries, the first page and the page after a cursor. For
 `order_by: ["created_at DESC"]`:
 
 ```sql
--- name: ListOrdersByAccount :many
+-- name: OrderListOrdersByAccount :many
 SELECT ... FROM orders
 WHERE account_id = @account_id
   AND deleted_at IS NULL
-  AND (sqlc.narg(after_created_at)::timestamptz IS NULL
-       OR (created_at, id) < (sqlc.narg(after_created_at), sqlc.narg(after_id)::uuid))
 ORDER BY created_at DESC, id DESC
-LIMIT @page_limit;
+LIMIT sqlc.arg(page_limit)::int;
+
+-- name: OrderListOrdersByAccountAfter :many
+SELECT ... FROM orders
+WHERE account_id = @account_id
+  AND deleted_at IS NULL
+  AND (created_at, id) < (sqlc.arg(after_created_at)::timestamptz, sqlc.arg(after_id)::uuid)
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(page_limit)::int;
 ```
+
+- **Why two queries:** one query with `(@after IS NULL OR …)` is a shape
+  Postgres plans poorly once a prepared statement switches to its generic
+  plan. Two fixed shapes always use the index. The repository picks one by
+  whether a page token was passed.
+- **Range bounds** are `col >= sqlc.arg(<f>_from) AND col < sqlc.arg(<f>_to)`,
+  both required.
+- **Casts make cursor and bound parameters plain values:** they aren't traced
+  to a column, so the generated `sqlc.yaml` adds a non-nullable `db_type`
+  override next to each nullable one (which makes insert parameters
+  pointers).
+- **Tokens:** the repository decodes the page token before the retry loop
+  (a bad token is the caller's error, `dal.ErrInvalidPageToken`) and checks it
+  against the query shape (the sqlc query name plus the keyset) and a hash of
+  the filter values, so a token can't be replayed against another list or
+  other filters. Default page size 50, maximum 500, overridable per list.
 
 - The repository fetches `page_size + 1` rows. The extra row only signals
   that another page exists; the token is built from the last row actually
@@ -689,8 +787,10 @@ LIMIT @page_limit;
 - Timestamps are encoded at full microsecond precision, so the cursor
   comparison is exact.
 - A row comparison (`(a, b) < (x, y)`) only works when every sort column has
-  the same direction. Mixed directions fall back to the expanded `OR` form and
-  produce lint warning `DAL203`.
+  the same direction. Mixed directions fall back to the expanded `OR` form
+  (`(a < x) OR (a = x AND b > y)`) and produce lint warning `DAL203`.
+- `dal.NewPage` builds the page from the `size + 1` rows and encodes the next
+  token from the last returned row.
 
 A DynamoDB backend would put `LastEvaluatedKey` in `k` and pass it straight
 through as `ExclusiveStartKey`.
@@ -800,12 +900,24 @@ type OrderRepository interface {
 	OrderWriteRepository
 }
 
-func NewOrderRepository(db dalpg.DB, opts ...dalpg.Option) OrderRepository
+func NewOrderRepository(run *dalpg.Runner) OrderRepository // pools stay at the composition root
+
+// ListOrdersByAccount returns one page. The params struct is dalforge's own:
+// the filters, PageSize and PageToken, and WithPageToken for dal.All.
+ListOrdersByAccount(ctx context.Context, p OrderListOrdersByAccountParams) (dal.Page[Order], error)
 
 // WithTx runs fn in a transaction on the writer pool. Tx is the DAL's own
-// type, never pgx.Tx.
-func WithTx(ctx context.Context, db dalpg.DB, fn func(tx Tx) error) error
+// type, never pgx.Tx: it hands out each store's repository bound to the
+// transaction, and sqlc's Queries for custom queries.
+func WithTx(ctx context.Context, run *dalpg.Runner, fn func(ctx context.Context, tx Tx) error) error
+
+func (tx Tx) Order() OrderRepository
+func (tx Tx) Queries() *sqlcdb.Queries
 ```
+
+One `WithTx` and `Tx` per DAL package (proto package), covering all of its
+stores, so a transaction can span them, as with Account and Order in the
+example.
 
 ### No driver types in the API
 
@@ -874,9 +986,53 @@ o, err := repo.Create(ctx, ordersdal.CreateOrderParams{
 })
 ```
 
-The read model (`Order`) keeps plain values for required columns. Pointer
-semantics for *updates* (whether nil means "unchanged" or "error") is still
-open and is decided with the DAL implementation.
+The read model (`Order`) keeps plain values for required columns.
+
+**Updates follow the same rule (decided 2026-10-01).** Every field an update
+sets is a pointer (`SET status = sqlc.narg(status)::text`):
+- nil on a required field is `ErrMissingField`, before any database call;
+- nil on an optional field sets NULL;
+- the key and version stay plain values, because they identify the row.
+
+Rejected alternatives:
+- **PATCH (nil = unchanged)** can't clear an optional field through the
+  generated update. It also turns a forgotten field into a silent no-op, and
+  gives nil a different meaning than in Create.
+- **Plain values** silently overwrite a forgotten field with its zero value
+  (`""`, `0`, `false`, the zero UUID), which `NOT NULL` can't catch.
+
+The remaining caveat: forgetting an *optional* field clears it. Updates are
+narrow by design (each rpc lists its columns), and the generated doc on each
+params type lists what nil means per field.
+
+### The generated implementation
+
+`repository.go` in each DAL package implements the interfaces (step 1.9c).
+- **One Runner call per method, around one sqlc call.** The Runner owns
+  routing, retries, error mapping and the per-attempt context.
+- **A `dal.Op` per rpc is fixed at generation time**, with idempotency per
+  §7: Get and Delete are idempotent, Create isn't, and Update is unless it's
+  a version compare-and-swap.
+- **Create** returns `MissingFieldError` for a nil required field before any
+  database call, and gives a nil UUID primary key a UUIDv7 *before* the retry
+  loop, so retries reuse the same ID.
+- **A versioned Update** that changes zero rows runs the generated
+  `<Store>Exists` query on the same connection, only on that failure path,
+  and returns `ErrVersionConflict` (row exists) or `ErrNotFound`.
+- **Delete without an entity response** uses `:execrows`, and zero rows
+  returns `ErrNotFound`.
+- **No pgx imports in generated code:** `dalpg.NewError` and `dalpg.IsNoRows`
+  cover what it needs.
+- **List** decodes the token, runs the first-page or `…After` query for
+  `size + 1` rows through `Runner.Read`, and builds the page with
+  `dal.NewPage`.
+- **`WithTx`** wraps `Runner.InTx`; `Tx.Queries()` uses the transaction's
+  connection (`Runner.Conn`).
+
+Proven end to end by the example project (`mise run demo`, §11): generate →
+sqlc → compile → the app exercises the repositories against Postgres. It
+covers UUIDv7, column defaults, a unique lookup, duplicates, a missing
+field, compare-and-swap with a stale version, soft delete and a custom query.
 
 ### Writes: basic and safe, the rest is custom
 
@@ -888,9 +1044,13 @@ Generated writes cover the common footguns and nothing more:
   path) tells `ErrNotFound` from `ErrVersionConflict`.
 - **Upsert** targets the primary key or a unique `conflict_on`, and the last
   writer wins: the version is bumped, with no compare-and-swap, so it stays
-  idempotent for retries. It never revives a soft-deleted row
-  (`DO UPDATE … WHERE deleted_at IS NULL`); hitting one returns
-  `ErrAlreadyExists`.
+  idempotent for retries. Its parameters follow the Create rules (pointers,
+  defaults, missing-field checks, UUIDv7). It never revives a soft-deleted
+  row: with a key target, `DO UPDATE … WHERE deleted_at IS NULL` skips it and
+  the DAL returns `ErrAlreadyExists`. With a unique-field target, the
+  conflict names the partial unique index (`ON CONFLICT (email) WHERE
+  deleted_at IS NULL`), so a soft-deleted row doesn't conflict and a new
+  live row is inserted.
 - **Delete** is soft when the entity has `ROLE_DELETE_TIME`.
 
 Anything richer goes in a custom sqlc query under `queries/custom/`. That
@@ -903,6 +1063,39 @@ never mix. Custom queries land on the same sqlc `Queries` and can join a
 - **Postgres routing:** `dalpg.DB` holds a `Reader` and a `Writer` pool.
   Eventual reads go to the reader. `CONSISTENCY_STRONG` reads and all writes
   go to the writer. A single-instance setup passes the same pool twice.
+- **`dalpg.Runner`** is the one runtime entry point the generated
+  implementation calls (step 1.9b):
+  - `Read(ctx, op, strong, fn)` routes to the reader, or the writer when the
+    read is strong or there's no reader. `Write(ctx, op, fn)` uses the
+    writer.
+  - `InTx(ctx, op, fn)` runs on the writer and hands `fn` a
+    transaction-bound Runner, whose statements are never retried on their
+    own; the whole transaction is retried by the policy. Nested `InTx` joins
+    the outer transaction.
+  - Every failure becomes a classified `*dal.Error` before the retrier sees
+    it. `fn` receives a `dalpg.DBTX`, which has the same method set as sqlc's,
+    so `sqlcdb.New(q)` works on a pool or a transaction alike.
+  - **Pools are an interface you can wrap.** `dalpg.DB{Reader, Writer}`
+    takes `dalpg.Pool` (the sqlc-compatible `DBTX` plus `Begin`), which
+    `*pgxpool.Pool` satisfies, and resolves it on every operation. A wrapper
+    can therefore swap the underlying pool at runtime without touching
+    generated code: an Aurora blue/green switchover, tracing, or per-tenant
+    pools. In-flight transactions finish on the connection they began on.
+    Detecting the switchover is the wrapper's job, not dalforge's.
+  - **Observability with no wrappers.** Every attempt runs with a context
+    carrying the `dal.Op` and the attempt number (`dal.OpFromContext`). The
+    Runner counts attempts itself, so this holds for any retrier.
+    - Inside `InTx`, statements carry their own op and the transaction's
+      attempt; BEGIN, COMMIT and ROLLBACK carry the transaction's op.
+    - pgx tracers (`ConnConfig.Tracer`, set on the pool at the composition
+      root) therefore label spans and metrics by repository method and tell
+      retries apart. sqlc's `-- name:` comment in each statement also names
+      the query.
+    - Generated code does nothing for this, and no proxy closures around
+      repository calls are needed.
+  - `dalpg` depends only on pgx (plus `dal`). The generated DAL package's
+    *exported* API still exposes no pgx types; `DBTX` is only used inside the
+    generated implementation.
 - **Runtime libraries** live in this module and are imported, not generated,
   so bug fixes don't need a regeneration:
   - `dal`: `Page[T]`, `All`, the page-token envelope, sentinel errors,
@@ -920,6 +1113,7 @@ never mix. Custom queries land on the same sqlc `Queries` and can join a
 | `dal.ErrVersionConflict` | a CAS update that matched no row while the row exists (follow-up check) |
 | `dal.ErrAlreadyExists` | `23505` unique violation |
 | `dal.ErrInvalidPageToken` | a page token that fails to decode or doesn't match the query |
+| `dal.ErrInvalidArgument` | caller error, never retried; `dal.ErrMissingField` (with `*dal.MissingFieldError` naming the field) wraps it for nil required insert params |
 
 Every error the repository returns is a `*dal.Error`. It carries the `Op`, the
 backend code (the SQLSTATE, for Postgres), a `Retryability`, and the
@@ -982,7 +1176,7 @@ generation time and passed in `Op`):
 | Update without `ROLE_VERSION` | yes | it sets absolute values |
 | Update with `ROLE_VERSION` | no | a retry after an ambiguous success would report the caller's own write as `ErrVersionConflict` |
 | Create | no | the repository assigns a client-side UUIDv7 before the first attempt, so a custom policy that retries anyway gets `ErrAlreadyExists` rather than a duplicate row |
-| `WithTx` | no by default | the transaction is retried as a whole, never statement by statement; opt in when `fn` has no side effects outside the transaction |
+| `WithTx` | no | the transaction is retried as a whole, never statement by statement, and only for errors Postgres rolled back (serialization failure, deadlock), which re-runs `fn`; keep side effects outside the database out of `fn` |
 
 **Everything is pluggable, following the open-closed principle.** The
 built-in SQLSTATE table is a default, not a contract. Deployment topology
@@ -995,14 +1189,17 @@ DALForge:
   a `dal.RetrierFunc` closure, or an adapter over a library such as
   [failsafe-go](https://github.com/failsafe-go/failsafe-go), a Go port of Java's
   Failsafe with retry policies, backoff, circuit breakers and bulkheads.
-  `dal.ShouldRetry` works as its retry predicate. The adapter lives in
-  `examples/`, so the runtime doesn't take on the dependency.
+  `dal.ShouldRetry` works as its retry predicate. No adapter ships yet; one
+  would live in `examples/`, so the runtime doesn't take on the dependency.
 - **`dalpg.WithClassifier(func(err error, base dal.Retryability) dal.Retryability)`**
   adjusts the SQLSTATE mapping without replacing the policy. For example, you
   could treat `57014` as retryable.
-- **The default is `dal.DefaultRetrier`:** at most 3 attempts, exponential
-  backoff with full jitter (25 ms base, 1 s cap), following `ShouldRetry` and
-  respecting the context. `dal.NoRetry` turns retries off.
+- **The default is `dal.DefaultRetrier`,** a `dal.Backoff{Attempts: 3, Base:
+  25ms, Max: 1s}`: exponential backoff with full jitter, following
+  `ShouldRetry` and respecting the context. If the context ends while waiting,
+  it returns the operation's error joined with the context error.
+  `dal.NoRetry` turns retries off. `ShouldRetry` never retries a canceled or
+  expired context.
 
 The generated implementation wraps each method in `retrier.Do`. Inside `WithTx`,
 individual statements are never retried: a `40001` aborts the whole
@@ -1166,13 +1363,55 @@ The generated `sqlc.yaml` turns on sqlc's safety features:
   opt-in CEL rules: reject `OFFSET` in custom queries, and flag sequential
   scans with `postgresql.explain`.
 
+### `dalforge.yaml` and the CLI (step 1.10)
+
+```yaml
+version: 1
+module: github.com/acme/shop   # Go module of this project (imports of generated code)
+backend: pg
+proto:
+  roots: [proto]               # import paths; default [proto]
+  files: ["orders/v1/*.proto"] # globs under the roots; default: every .proto
+pg:
+  version: "16.9"              # deploy target (DAL207); default 16
+out:                           # defaults shown
+  schema: schema/schema.sql
+  queries: queries/generated
+  custom: queries/custom       # user-owned; never written
+  sqlc: gen/sqlcdb             # its last element is sqlc's Go package name
+  dal: gen
+```
+
+**Validation:**
+- Unknown keys are errors, so a typo can't silently do nothing.
+- `module` is required.
+- Every path must stay inside the project.
+- `out.custom` may not overlap any generated directory.
+- Vendored copies of the dal options are never treated as inputs.
+
+**Commands:**
+- **`dalforge lint [-config dalforge.yaml]`** runs load → check → build →
+  emit without writing anything. It prints findings to stderr and exits 1 on
+  errors; it's silent on a clean IDL.
+- **`dalforge generate`** runs the same pipeline, then:
+  - writes only changed files, so mtimes stay stable;
+  - removes stale generated files, but only files headed `Code generated by
+    dalforge` or `by sqlc`, and never anything under `out.custom`;
+  - runs sqlc, clearing sqlc's old output first, since sqlc never deletes
+    files for removed queries;
+  - skips sqlc with a note when there are no queries at all.
+- **Cascades are suppressed:** a query with a broken reference (DAL117)
+  doesn't also report a request-shape error (DAL107), so a single typo yields
+  a single error.
+
 ## 10. Testing
 
 | Suite | Where | Runs with | Needs |
 |---|---|---|---|
 | Unit | `*_test.go` next to the code | `mise run test` (part of `mise run check`) | nothing |
 | Golden | unit tests comparing generator output with `testdata/**/*.golden` via `internal/golden` (`Assert` for one file, `AssertDir` for a generated file set, including stale-file detection) | `mise run test`; `mise run test:update` rewrites them (`DALFORGE_UPDATE_GOLDEN=1`, refused when `CI` is set) | nothing |
-| Integration | `//go:build integration` files next to the code they cover, plus end-to-end suites in `internal/integration/` | `mise run test:integration` (runs `vm:up` and `db:up` first) | nothing beyond mise (Colima locally, native Docker in CI) |
+| Integration | `//go:build integration` tests that need Postgres: `dal/dalpg` (real SQLSTATE errors, routing, transactions, tracer) and `internal/integration` | `mise run test:integration` (runs `vm:up` and `db:up` first; about 5 s warm) | nothing beyond mise (Colima locally, native Docker in CI) |
+| End to end | `examples/orders`, run like a user's project | `mise run demo` (about 7 s warm) | the same |
 | Examples | `examples/orders` regenerated and diffed | `mise run examples` (part of `mise run check`) | nothing |
 
 **Local Postgres.** `compose.yaml` runs `postgres:16.9`, the community
@@ -1270,6 +1509,27 @@ A runnable demo exercises CRUD and pagination against Postgres 16.
 checked-in output can't go stale. The example grows with each phase: CRUD in
 phase 1, List and lint in phase 2, and a migration walkthrough in phase 3.
 
+
+**Built in step 1.11** (phase-1 scope: CRUD by key). `examples/orders` is a
+standalone module with a `shop.v1` IDL (Account and Order), `dalforge.yaml`,
+a custom report query and a `main.go` that plays out a shop's day with
+gofakeit data, checking every step. Generated files (`schema/`,
+`queries/generated/`, `sqlc.yaml`, `gen/`) are gitignored and recreated by
+`dalforge generate`. `mise run demo` runs it end to end and exits non-zero on
+any unexpected outcome, so it's also the smoke test.
+
+**Extended in phase 2:** the ESR ladder (four List rpcs, from `eq` only to
+`eq` + range), paging with tokens, `dal.All`, a rejected replayed token, a
+range window, an upsert by email, and order placement in `WithTx` that locks
+the account with a custom `FOR KEY SHARE` query (`queries/custom/accounts.sql`).
+It ends by printing the derived indexes and the rpcs each one serves.
+
+**Test-suite weight:** an earlier version of the suite built six throwaway
+Go modules per run to compile generated code. That was slow on a laptop, and
+it once hung waiting on macOS's first-launch check of a freshly built test
+binary. Those tests were replaced by the example. The fast suites are `check`
+(about 12 s) and `test:integration` (about 5 s), and `demo` is the end-to-end
+proof.
 ## 12. Documentation
 
 Because DALForge introduces its own IDL, the **user manual** (`docs/manual/`)
@@ -1277,12 +1537,31 @@ is a first-class deliverable. This design doc records decisions and their
 reasons; the manual teaches users every option, access pattern, combination,
 limitation, type mapping and lint rule, without relying on `examples/`.
 
-The manual is kept true by tests:
-- every rule ID has a catalog entry, and every option field is documented;
-- complete IDL snippets in the manual compile;
-- diagnostics link to their rule entry.
+**Generated where it must match the code (decided 2026-10-02).** The parts
+that drift are generated, and `check` fails while they're stale
+(`internal/docgen`; `mise run docs` regenerates):
+- the **rule catalog** (`lint-rules.md`) from `internal/rules/catalog/*.md`,
+  one Markdown file per rule with a header (severity, scope, title,
+  planned). `internal/rules` tests that the catalog and the rule constants
+  match both ways, and that the severity each `diags.Add` site uses is the
+  documented one. The files are embedded in the binary, ready for a future
+  `dalforge lint -explain`;
+- the **option reference** (`options.md`) from the comments in the options
+  protos, which are therefore the source of truth;
+- the **type tables** in `types.md`, spliced between `<!-- generated:… -->`
+  markers, by building a probe IDL through the real loader and pg backend.
 
-The manual is written once the MVP exists (end of phase 2 plus a runnable demo), so it describes a stable surface. From then on, every increment updates the sections it affects.
+The narrative chapters are hand-written; `internal/manualtest` checks that
+every relative link and anchor in the manual resolves.
+
+Planned: complete IDL snippets in the manual compile; diagnostics link to
+their rule entry.
+
+**Written 2026-10-01**, after the MVP: a quickstart (run the demo, tour the
+generated files, change an access pattern, trip the linter, run the tests)
+and chapters on concepts, project setup, the IDL, types, access patterns,
+lists, the Go API, schema changes, lint rules and limitations. From now on,
+every increment updates the sections it affects.
 
 ## 13. Roadmap
 
@@ -1295,9 +1574,13 @@ The manual is written once the MVP exists (end of phase 2 plus a runnable demo),
    `examples/orders`.
 2. **List and indexes:** access paths, sort resolution, keyset List with page
    tokens and `dal.All`, index derivation and merging, the DAL1xx/DAL2xx lint
-   rules. Upsert, soft delete, optimistic locking, and `WithTx` if it stays
-   thin.
-3. **Migrations:** snapshot, diff, the additive contract with retired columns, DAL3xx rules,
+   rules. Upsert, soft delete, optimistic locking, and `WithTx`. **Done
+   (2026-10-01).**
+   **v0 distribution (2026-10-02):** user manual with generated parts, the
+   runtime as its own module, CI, GoReleaser releases, and stable derived
+   index names, so v0 is usable for new databases before migrations exist.
+3. **Migrations:** an adoption baseline for schemas deployed with v0,
+   snapshot, diff, the additive contract with retired columns, DAL3xx rules,
    golang-migrate file emission.
 4. **Extensions:** `custom_type` ergonomics (pgvector, PostGIS), buf plugin
    mode, the Atlas backend, sqlc vet rule packs, shard-key enforcement, and a
@@ -1309,7 +1592,11 @@ The manual is written once the MVP exists (end of phase 2 plus a runnable demo),
 |---|---|
 | Generator packaging | Standalone CLI embedding protocompile; buf plugin later |
 | Domain types | sqlc's model structs, re-exported as type aliases from the generated DAL package. No separate domain model and no copy layer (revised 2026-09-30; originally generated structs). Proto is only the IDL |
+| Observability | Tracing and metrics come from pgx's own tracers, configured on the pool. The Runner puts `dal.Op` and the attempt number on every attempt's context (`dal.OpFromContext`), so tracers see the repository method and retries without wrappers. Generated code stays out of it |
+| Pool injection | `dalpg.DB` takes the `dalpg.Pool` interface (not `*pgxpool.Pool`), resolved per operation; generated repositories take a `*dalpg.Runner`. Users can wrap pools (blue/green swap, tracing, tenancy) without editing generated code |
 | Driver isolation | No `pgx`/`pgtype`/`pgconn` types in the DAL package's exported API: full sqlc type overrides, the DAL's own `Tx`, errors mapped to `dal` sentinels, pools only at the composition root. Enforced by a `go/types` test |
+| Update parameters | Same rule as Create (decided 2026-10-01): SET fields are pointers, nil required → `ErrMissingField`, nil optional → NULL; key and version stay values. PATCH and plain values were rejected (see §7) |
+| Decimal Go type | `string` by default (verified lossless); a decimal library is opt-in via `custom_type` + `go_type`; money as int64 cents is the recommendation |
 | Insert parameters | Every field is a pointer in Create/Upsert params (decided 2026-10-01). nil means: required without default → `ErrMissingField`; with default → the default (`COALESCE(sqlc.narg(..), default)`); optional → NULL; UUID PK → a UUIDv7. Call sites use Go 1.26 `new(expr)` |
 | Generated writes | Basic and safe only: version compare-and-swap on update (follow-up existence check tells `ErrNotFound` from `ErrVersionConflict`), upsert on the PK or a unique field (last writer wins, never revives soft-deleted rows), soft delete. Everything else is a custom sqlc query in the user-owned `queries/custom/` |
 | Index model | Query-first; explicit indexes only for partial/covering/sort-pinning |
@@ -1325,6 +1612,9 @@ The manual is written once the MVP exists (end of phase 2 plus a runnable demo),
 | Options Go bindings | protoc (pinned in mise) + protoc-gen-go (a `go tool` dependency, so it always matches the protobuf runtime); no buf. Checked in next to the protos; `mise run proto:check` (part of `check`) fails on stale output; unit tests pin extension numbers and import paths. Field-number safety of user IDL comes from the snapshot rules (DAL111–113) |
 | Testing | Unit + golden in `mise run check`; `integration` build tag against a docker compose `postgres:16.9` in `mise run test:integration`; `check:all` for CI |
 | List shapes | One fixed shape per rpc: required equality params, at most one range (half-open, both bounds required) as the last column; each filter combination is its own rpc and index (ESR ladder); naming lint DAL114 (warn); nullable sort columns only as the range column (DAL115) |
+| List SQL | Two sqlc queries per List (first page, `…After` cursor) rather than one with `@cursor IS NULL OR …`, so generic plans keep using the index (2026-10-01) |
+| Explicit indexes serve lists | A list whose eq + sort columns lead an explicit index is served by it, even without the key tie-breakers; no near-duplicate derived index (2026-10-01) |
+| Transactions | One `WithTx`/`Tx` per DAL package: repositories of every store bound to the transaction, plus `Queries()` for custom queries. Not idempotent: retried as a whole (re-running `fn`) only when Postgres rolled it back, never after an ambiguous failure (2026-10-01) |
 | Referential integrity | Not generated. Demonstrated in `examples/orders` (Account ↔ Order) as an application pattern: `WithTx` + `FOR KEY SHARE` + custom sqlc queries. Generated opt-in checks are a possible later addition |
 | PG version & types | The IDL declares requirements (`(dal.pg.v1.file)`: `min_version`, `extensions`); `dalforge.yaml` declares the deploy target (`pg.version`). The `Type` enum is append-only. Per-version and per-extension availability lives in a generator capability table, checked by DAL207/DAL208. `custom_type` requires `go_type` |
 | Distribution | Consumers install dalforge with mise's `go:` backend (version in their `mise.toml`). The binary stays CGO-free, and its version comes from build info |

@@ -1,0 +1,10 @@
+paths.proto:98:3: info DAL206: rpc ListDocsByOwner and ListDocsByOwnerAndPublishedAt filter by the same fields [owner_id] but sort differently ([title DESC, tenant_id DESC, id DESC] vs [published_at, tenant_id, id]), so each needs its own index; aligning order_by would let them share one
+DocStore.ListDocsByFolder: eq=[folder_id] range="" keys=[title, tenant_id, id] mixed=false index=docs_by_folder
+DocStore.ListDocsByOwner: eq=[owner_id] range="" keys=[title DESC, tenant_id DESC, id DESC] mixed=false index=doc_owner_id_title_tenant_id_id_idx
+DocStore.ListDocsByOwnerAndPublishedAt: eq=[owner_id] range="published_at" keys=[published_at, tenant_id, id] mixed=false index=doc_owner_id_published_at_tenant_id_id_idx
+DocStore.ListDocsByOwnerAndTitle: eq=[owner_id title] range="" keys=[created_at DESC, tenant_id DESC, id DESC] mixed=false index=doc_owner_id_title_created_at_tenant_id_id_idx
+DocStore.ListDocsByTenant: eq=[tenant_id] range="" keys=[id] mixed=false index=primary key
+CREATE INDEX docs_by_folder ON doc (folder_id, title); for=[ListDocsByFolder]
+CREATE INDEX doc_owner_id_title_tenant_id_id_idx ON doc (owner_id, title, tenant_id, id) WHERE deleted_at IS NULL; for=[ListDocsByOwner]
+CREATE INDEX doc_owner_id_title_created_at_tenant_id_id_idx ON doc (owner_id, title, created_at, tenant_id, id) WHERE deleted_at IS NULL; for=[ListDocsByOwnerAndTitle]
+CREATE INDEX doc_owner_id_published_at_tenant_id_id_idx ON doc (owner_id, published_at, tenant_id, id) WHERE deleted_at IS NULL AND published_at IS NOT NULL; for=[ListDocsByOwnerAndPublishedAt]
