@@ -20,8 +20,8 @@ RETURNING id, account_id, status, note, version, created_at, updated_at, deleted
 -- orders.v1.OrderStore.UpdateStatus (update)
 -- name: OrderUpdateStatus :one
 UPDATE orders
-SET status = @status,
-    note = @note,
+SET status = sqlc.narg(status)::text,
+    note = sqlc.narg(note)::text,
     updated_at = now(),
     version = version + 1
 WHERE id = @id

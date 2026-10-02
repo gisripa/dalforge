@@ -206,7 +206,10 @@ func (qb queryBuilder) update(name string, s *ir.Update) (string, error) {
 		if c == nil {
 			return "", fmt.Errorf("field %q has no column", f)
 		}
-		sets = append(sets, fmt.Sprintf("%s = @%s", c.Name, f))
+		// Like Create: a cast, nullable parameter, so every SET field is a
+		// pointer in Go. nil on a required field is rejected by the DAL
+		// before this runs; nil on an optional field sets NULL.
+		sets = append(sets, fmt.Sprintf("%s = sqlc.narg(%s)::%s", c.Name, f, c.Type))
 	}
 	sets = append(sets, qb.managed()...)
 

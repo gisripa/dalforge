@@ -17,7 +17,7 @@ type Item = sqlcdb.Item
 type ItemGetItemParams = sqlcdb.ItemGetItemParams
 
 // ItemCreateItemParams are the parameters of Item.CreateItem.
-// Every field is a pointer; nil means:
+// Fields to write are pointers; nil means:
 //   - TenantID: a new UUIDv7
 //   - ID: a new UUIDv7
 //   - Sku: an error (required)
@@ -26,6 +26,10 @@ type ItemGetItemParams = sqlcdb.ItemGetItemParams
 type ItemCreateItemParams = sqlcdb.ItemCreateItemParams
 
 // ItemUpdateItemParams are the parameters of Item.UpdateItem.
+// Fields to write are pointers; nil means:
+//   - Sku: an error (required)
+//   - Name: an error (required)
+//   - Color: set NULL
 type ItemUpdateItemParams = sqlcdb.ItemUpdateItemParams
 
 // ItemDeleteItemParams are the parameters of Item.DeleteItem.

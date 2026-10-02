@@ -15,7 +15,7 @@ import (
 type Order = sqlcdb.Order
 
 // OrderCreateParams are the parameters of Order.Create.
-// Every field is a pointer; nil means:
+// Fields to write are pointers; nil means:
 //   - ID: a new UUIDv7
 //   - AccountID: an error (required)
 //   - Status: the column default 'pending'
@@ -23,6 +23,9 @@ type Order = sqlcdb.Order
 type OrderCreateParams = sqlcdb.OrderCreateParams
 
 // OrderUpdateStatusParams are the parameters of Order.UpdateStatus.
+// Fields to write are pointers; nil means:
+//   - Status: an error (required)
+//   - Note: set NULL
 type OrderUpdateStatusParams = sqlcdb.OrderUpdateStatusParams
 
 // OrderReadRepository holds the read access patterns of orders.v1.OrderStore.

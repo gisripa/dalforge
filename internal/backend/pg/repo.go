@@ -39,9 +39,11 @@ func (g *goFile) repository(st *ir.Store, e *ir.Entity, t *Table, ms []method, s
 		}
 		fmt.Fprintf(&g.body, "// %s implements %s.%s.\n", m.rpc, st.FullName, m.rpc)
 		fmt.Fprintf(&g.body, "func (r *%s) %s%s {\n", recv, m.rpc, g.signature(m))
-		switch m.q.Spec.(type) {
+		switch s := m.q.Spec.(type) {
 		case *ir.Create:
 			g.createChecks(e, t, m, short)
+		case *ir.Update:
+			g.updateChecks(e, s, m, short)
 		}
 		g.call(e, m, short, sqlcPkg)
 		g.body.WriteString("}\n\n")
@@ -108,6 +110,24 @@ func (g *goFile) createChecks(e *ir.Entity, t *Table, m method, short string) {
 			fmt.Fprintf(&g.body, "\tif %s == nil {\n", ref(f.Name))
 			fmt.Fprintf(&g.body, "\t\treturn %s{}, dalpg.NewError(%s, &dal.MissingFieldError{Field: %q})\n\t}\n",
 				m.model, opVar(short, m), f.Name)
+		}
+	}
+}
+
+// updateChecks rejects a nil required field before any database call, as
+// Create does; nil on an optional field means "set NULL".
+func (g *goFile) updateChecks(e *ir.Entity, s *ir.Update, m method, short string) {
+	ref := func(field string) string {
+		if m.inline {
+			return goIdent(field)
+		}
+		return "p." + camel(field)
+	}
+	for _, name := range s.Columns.Names {
+		if f := e.Field(name); f != nil && !f.Nullable {
+			fmt.Fprintf(&g.body, "\tif %s == nil {\n", ref(name))
+			fmt.Fprintf(&g.body, "\t\treturn %s{}, dalpg.NewError(%s, &dal.MissingFieldError{Field: %q})\n\t}\n",
+				m.model, opVar(short, m), name)
 		}
 	}
 }

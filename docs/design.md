@@ -383,7 +383,7 @@ comes from the core layer and is the same for every backend.
 |---|---|---|
 | `string` | `text` | `string` |
 | `string` + `FORMAT_UUID` | `uuid` | `uuid.UUID` |
-| `string` + `FORMAT_DECIMAL` | `numeric` | `string` (decimal library TBD) |
+| `string` + `FORMAT_DECIMAL` | `numeric` | `string`: exact, verified round trip (a 30-digit value and NULL), no dependency |
 | `string` + `FORMAT_JSON` | `jsonb` | `json.RawMessage` |
 | `bool` | `boolean` | `bool` |
 | `int32`, `sint32`, `sfixed32` | `integer` | `int32` |
@@ -395,6 +395,13 @@ comes from the core layer and is the same for every backend.
 | enum | `text` (value name) | a generated string type |
 | repeated scalar | `<type>[]` | `[]T` |
 | message, map, `google.protobuf.Struct` | `jsonb` | `json.RawMessage` |
+
+**Decimals (decided 2026-10-01)** default to `string`. A project that wants
+a decimal library opts in per column with `custom_type: "numeric(12, 2)"` +
+`go_type: "github.com/shopspring/decimal.Decimal"`. Insert parameters are
+typed per SQL type, so all `numeric` columns then share that Go type (DAL213).
+For money, the manual recommends `int64` minor units (cents), as the example
+does.
 
 `optional` fields become pointers (`*T`) in the model struct, via the
 generated sqlc type overrides (no `pgtype` wrappers). The Go type follows the
@@ -884,9 +891,24 @@ o, err := repo.Create(ctx, ordersdal.CreateOrderParams{
 })
 ```
 
-The read model (`Order`) keeps plain values for required columns. Pointer
-semantics for *updates* (whether nil means "unchanged" or "error") is still
-open and is decided with the DAL implementation.
+The read model (`Order`) keeps plain values for required columns.
+
+**Updates follow the same rule (decided 2026-10-01).** Every field an update
+sets is a pointer (`SET status = sqlc.narg(status)::text`):
+- nil on a required field is `ErrMissingField`, before any database call;
+- nil on an optional field sets NULL;
+- the key and version stay plain values, because they identify the row.
+
+Rejected alternatives:
+- **PATCH (nil = unchanged)** can't clear an optional field through the
+  generated update. It also turns a forgotten field into a silent no-op, and
+  gives nil a different meaning than in Create.
+- **Plain values** silently overwrite a forgotten field with its zero value
+  (`""`, `0`, `false`, the zero UUID), which `NOT NULL` can't catch.
+
+The remaining caveat: forgetting an *optional* field clears it. Updates are
+narrow by design (each rpc lists its columns), and the generated doc on each
+params type lists what nil means per field.
 
 ### The generated implementation
 
@@ -1442,6 +1464,8 @@ The manual is written once the MVP exists (end of phase 2 plus a runnable demo),
 | Observability | Tracing and metrics come from pgx's own tracers, configured on the pool. The Runner puts `dal.Op` and the attempt number on every attempt's context (`dal.OpFromContext`), so tracers see the repository method and retries without wrappers. Generated code stays out of it |
 | Pool injection | `dalpg.DB` takes the `dalpg.Pool` interface (not `*pgxpool.Pool`), resolved per operation; generated repositories take a `*dalpg.Runner`. Users can wrap pools (blue/green swap, tracing, tenancy) without editing generated code |
 | Driver isolation | No `pgx`/`pgtype`/`pgconn` types in the DAL package's exported API: full sqlc type overrides, the DAL's own `Tx`, errors mapped to `dal` sentinels, pools only at the composition root. Enforced by a `go/types` test |
+| Update parameters | Same rule as Create (decided 2026-10-01): SET fields are pointers, nil required → `ErrMissingField`, nil optional → NULL; key and version stay values. PATCH and plain values were rejected (see §7) |
+| Decimal Go type | `string` by default (verified lossless); a decimal library is opt-in via `custom_type` + `go_type`; money as int64 cents is the recommendation |
 | Insert parameters | Every field is a pointer in Create/Upsert params (decided 2026-10-01). nil means: required without default → `ErrMissingField`; with default → the default (`COALESCE(sqlc.narg(..), default)`); optional → NULL; UUID PK → a UUIDv7. Call sites use Go 1.26 `new(expr)` |
 | Generated writes | Basic and safe only: version compare-and-swap on update (follow-up existence check tells `ErrNotFound` from `ErrVersionConflict`), upsert on the PK or a unique field (last writer wins, never revives soft-deleted rows), soft delete. Everything else is a custom sqlc query in the user-owned `queries/custom/` |
 | Index model | Query-first; explicit indexes only for partial/covering/sort-pinning |

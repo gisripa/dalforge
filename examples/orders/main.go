@@ -118,15 +118,21 @@ func run(ctx context.Context, seed uint64) error {
 	o := placed[0]
 	s.title("Update with the version we read (compare-and-swap)")
 	paid, err := orders.UpdateOrderStatus(ctx, shopdal.OrderUpdateOrderStatusParams{
-		ID: o.ID, Version: o.Version, Status: "paid", Note: new("paid by card"),
+		ID: o.ID, Version: o.Version, Status: new("paid"), Note: new("paid by card"),
 	})
 	if err := s.check(err == nil && paid.Status == "paid" && paid.Version == 2, "order %s → status=%s, version=%d", short(paid.ID), paid.Status, paid.Version, err); err != nil {
 		return err
 	}
 
 	s.title("A stale version loses: someone else already changed the order")
-	_, err = orders.UpdateOrderStatus(ctx, shopdal.OrderUpdateOrderStatusParams{ID: o.ID, Version: o.Version, Status: "cancelled"})
+	_, err = orders.UpdateOrderStatus(ctx, shopdal.OrderUpdateOrderStatusParams{ID: o.ID, Version: o.Version, Status: new("cancelled")})
 	if err := s.check(errors.Is(err, dal.ErrVersionConflict), "update at version %d → dal.ErrVersionConflict", o.Version, err); err != nil {
+		return err
+	}
+
+	s.title("Update with a required field left nil fails before touching the database")
+	_, err = orders.UpdateOrderStatus(ctx, shopdal.OrderUpdateOrderStatusParams{ID: o.ID, Version: paid.Version})
+	if err := s.check(errors.As(err, &missing) && missing.Field == "status", "missing field reported: %v", err, nil); err != nil {
 		return err
 	}
 

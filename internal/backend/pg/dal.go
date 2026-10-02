@@ -160,7 +160,7 @@ type method struct {
 	noModel bool   // returns only error (Delete without an entity response)
 	execRow bool   // sqlc :execrows (Delete without an entity response)
 	pending bool   // kind not generated yet (List, Upsert: phase 2)
-	nilDoc  string // Create: what nil means per field
+	nilDoc  string // Create/Update: what nil means per written field
 }
 
 type param struct {
@@ -194,7 +194,12 @@ func methods(st *ir.Store, e *ir.Entity, t *Table) []method {
 				}
 			}
 		case *ir.Update:
-			byColumn(s.Columns.Names)
+			m.nilDoc = updateNilDoc(e, t, s.Columns.Names)
+			for _, f := range s.Columns.Names {
+				if c := column(t, f); c != nil {
+					m.params = append(m.params, param{name: f, typ: insertParamType(c)})
+				}
+			}
 			byColumn(e.PrimaryKey())
 			for _, f := range e.Fields {
 				if f.Role == ir.RoleVersion {
@@ -246,8 +251,8 @@ func (g *goFile) store(st *ir.Store, ms []method, sqlcPkg string) {
 		} else {
 			if m.alias != "" {
 				fmt.Fprintf(&g.body, "// %s are the parameters of %s.%s.\n", m.alias, short, m.rpc)
-				if m.q.Spec.Kind() == "create" {
-					fmt.Fprintf(&g.body, "// Every field is a pointer; nil means:\n%s", m.nilDoc)
+				if m.nilDoc != "" {
+					fmt.Fprintf(&g.body, "// Fields to write are pointers; nil means:\n%s", m.nilDoc)
 				}
 				fmt.Fprintf(&g.body, "type %s = %s.%s\n\n", m.alias, sqlcPkg, m.alias)
 			}
@@ -271,6 +276,24 @@ func (g *goFile) store(st *ir.Store, ms []method, sqlcPkg string) {
 // pointer, except types where nil already means NULL.
 func insertParamType(c *Column) GoType {
 	return withNull(GoType{Import: c.GoType.Import, Name: c.GoType.Name, Slice: c.GoType.Slice}, false)
+}
+
+// updateNilDoc documents what nil means for each field an Update sets. The
+// key and version identify the row and stay plain values.
+func updateNilDoc(e *ir.Entity, t *Table, fields []string) string {
+	var b strings.Builder
+	for _, name := range fields {
+		f, c := e.Field(name), column(t, name)
+		if f == nil || c == nil {
+			continue
+		}
+		means := "an error (required)"
+		if f.Nullable {
+			means = "set NULL"
+		}
+		fmt.Fprintf(&b, "//   - %s: %s\n", camel(f.Name), means)
+	}
+	return b.String()
 }
 
 // createNilDoc documents what nil means for each Create parameter.

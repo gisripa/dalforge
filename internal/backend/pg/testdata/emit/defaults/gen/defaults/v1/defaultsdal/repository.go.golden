@@ -85,6 +85,12 @@ func (r *itemRepository) CreateItem(ctx context.Context, p ItemCreateItemParams)
 
 // UpdateItem implements defaults.v1.ItemStore.UpdateItem.
 func (r *itemRepository) UpdateItem(ctx context.Context, p ItemUpdateItemParams) (Item, error) {
+	if p.Sku == nil {
+		return Item{}, dalpg.NewError(_opItemUpdateItem, &dal.MissingFieldError{Field: "sku"})
+	}
+	if p.Name == nil {
+		return Item{}, dalpg.NewError(_opItemUpdateItem, &dal.MissingFieldError{Field: "name"})
+	}
 	var out Item
 	err := r.run.Write(ctx, _opItemUpdateItem, func(ctx context.Context, q dalpg.DBTX) error {
 		var err error

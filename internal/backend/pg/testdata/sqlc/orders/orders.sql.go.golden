@@ -120,8 +120,8 @@ func (q *Queries) OrderGetById(ctx context.Context, id uuid.UUID) (Order, error)
 
 const orderUpdateStatus = `-- name: OrderUpdateStatus :one
 UPDATE orders
-SET status = $1,
-    note = $2,
+SET status = $1::text,
+    note = $2::text,
     updated_at = now(),
     version = version + 1
 WHERE id = $3
@@ -131,7 +131,7 @@ RETURNING id, account_id, status, note, version, created_at, updated_at, deleted
 `
 
 type OrderUpdateStatusParams struct {
-	Status  string
+	Status  *string
 	Note    *string
 	ID      uuid.UUID
 	Version int64

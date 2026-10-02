@@ -63,6 +63,9 @@ func (r *orderRepository) Create(ctx context.Context, p OrderCreateParams) (Orde
 
 // UpdateStatus implements orders.v1.OrderStore.UpdateStatus.
 func (r *orderRepository) UpdateStatus(ctx context.Context, p OrderUpdateStatusParams) (Order, error) {
+	if p.Status == nil {
+		return Order{}, dalpg.NewError(_opOrderUpdateStatus, &dal.MissingFieldError{Field: "status"})
+	}
 	var out Order
 	err := r.run.Write(ctx, _opOrderUpdateStatus, func(ctx context.Context, q dalpg.DBTX) error {
 		var err error

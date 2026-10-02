@@ -180,9 +180,9 @@ func (q *Queries) ItemGetItemBySku(ctx context.Context, sku string) (Item, error
 
 const itemUpdateItem = `-- name: ItemUpdateItem :one
 UPDATE item
-SET sku = $1,
-    name = $2,
-    color = $3,
+SET sku = $1::text,
+    name = $2::text,
+    color = $3::text,
     updated_at = now(),
     version = version + 1
 WHERE tenant_id = $4
@@ -193,8 +193,8 @@ RETURNING tenant_id, id, sku, name, color, version, created_at, updated_at, dele
 `
 
 type ItemUpdateItemParams struct {
-	Sku      string
-	Name     string
+	Sku      *string
+	Name     *string
 	Color    *string
 	TenantID uuid.UUID
 	ID       uuid.UUID
