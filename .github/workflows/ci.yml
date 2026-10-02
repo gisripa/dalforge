@@ -32,8 +32,10 @@ jobs:
             ~/go/pkg/mod
             ~/.cache/go-build
             ~/.cache/golangci-lint
-          key: go-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: go-${{ runner.os }}-
+          # One key per job: a cache key is saved once, by whichever job
+          # finishes first, so a shared key would drop the other job's paths.
+          key: go-check-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-check-${{ runner.os }}-
       - run: mise run check
 
   postgres:
@@ -47,8 +49,8 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: go-${{ runner.os }}-
+          key: go-postgres-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-postgres-${{ runner.os }}-
       - run: mise run test:integration
       # End to end, like a user: generate → sqlc → build → run against Postgres.
       - run: mise run demo
