@@ -1,0 +1,1 @@
+dal206.proto:38:3: info DAL206: rpc ListTicketsByQueueNewest and ListTicketsByQueuePriority filter by the same fields [queue] but sort differently ([created_at DESC, id DESC] vs [priority DESC, id DESC]), so each needs its own index; aligning order_by would let them share one

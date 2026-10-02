@@ -4,6 +4,7 @@ package defaultsdal
 
 import (
 	"context"
+	"time"
 
 	"example.com/dalforgefixture/gen/sqlcdb"
 	"github.com/gisripa/dalforge/dal"
@@ -23,11 +24,16 @@ func NewItemRepository(run *dalpg.Runner) ItemRepository {
 }
 
 var (
-	_opItemGetItem      = dal.Op{Entity: "Item", Method: "GetItem", Kind: dal.OpGet, Idempotent: true}
-	_opItemGetItemBySku = dal.Op{Entity: "Item", Method: "GetItemBySku", Kind: dal.OpGet, Idempotent: true}
-	_opItemCreateItem   = dal.Op{Entity: "Item", Method: "CreateItem", Kind: dal.OpCreate, Idempotent: false}
-	_opItemUpdateItem   = dal.Op{Entity: "Item", Method: "UpdateItem", Kind: dal.OpUpdate, Idempotent: false}
-	_opItemDeleteItem   = dal.Op{Entity: "Item", Method: "DeleteItem", Kind: dal.OpDelete, Idempotent: true}
+	_opItemGetItem                       = dal.Op{Entity: "Item", Method: "GetItem", Kind: dal.OpGet, Idempotent: true}
+	_opItemGetItemBySku                  = dal.Op{Entity: "Item", Method: "GetItemBySku", Kind: dal.OpGet, Idempotent: true}
+	_opItemListItemsByTenant             = dal.Op{Entity: "Item", Method: "ListItemsByTenant", Kind: dal.OpList, Idempotent: true}
+	_opItemListItemsByTenantAndCreatedAt = dal.Op{Entity: "Item", Method: "ListItemsByTenantAndCreatedAt", Kind: dal.OpList, Idempotent: true}
+	_opItemListItemsByTenantNewest       = dal.Op{Entity: "Item", Method: "ListItemsByTenantNewest", Kind: dal.OpList, Idempotent: true}
+	_opItemCreateItem                    = dal.Op{Entity: "Item", Method: "CreateItem", Kind: dal.OpCreate, Idempotent: false}
+	_opItemUpdateItem                    = dal.Op{Entity: "Item", Method: "UpdateItem", Kind: dal.OpUpdate, Idempotent: false}
+	_opItemUpsertItem                    = dal.Op{Entity: "Item", Method: "UpsertItem", Kind: dal.OpUpsert, Idempotent: true}
+	_opItemUpsertItemBySku               = dal.Op{Entity: "Item", Method: "UpsertItemBySku", Kind: dal.OpUpsert, Idempotent: true}
+	_opItemDeleteItem                    = dal.Op{Entity: "Item", Method: "DeleteItem", Kind: dal.OpDelete, Idempotent: true}
 )
 
 // GetItem implements defaults.v1.ItemStore.GetItem.
@@ -50,6 +56,95 @@ func (r *itemRepository) GetItemBySku(ctx context.Context, sku string) (Item, er
 		return err
 	})
 	return out, err
+}
+
+// ListItemsByTenant implements defaults.v1.ItemStore.ListItemsByTenant.
+func (r *itemRepository) ListItemsByTenant(ctx context.Context, p ItemListItemsByTenantParams) (dal.Page[Item], error) {
+	const shape = "ItemListItemsByTenant:[id]"
+	size := dal.PageSize(p.PageSize, 50, 500)
+	filters := []any{p.TenantID}
+	var afterID uuid.UUID
+	if p.PageToken != "" {
+		if err := dal.DecodeToken(p.PageToken, shape, filters, &afterID); err != nil {
+			return dal.Page[Item]{}, dalpg.NewError(_opItemListItemsByTenant, err)
+		}
+	}
+	var rows []Item
+	err := r.run.Read(ctx, _opItemListItemsByTenant, false, func(ctx context.Context, q dalpg.DBTX) error {
+		var err error
+		if p.PageToken == "" {
+			rows, err = sqlcdb.New(q).ItemListItemsByTenant(ctx, sqlcdb.ItemListItemsByTenantParams{TenantID: p.TenantID, PageLimit: size + 1})
+		} else {
+			rows, err = sqlcdb.New(q).ItemListItemsByTenantAfter(ctx, sqlcdb.ItemListItemsByTenantAfterParams{TenantID: p.TenantID, AfterID: afterID, PageLimit: size + 1})
+		}
+		return err
+	})
+	if err != nil {
+		return dal.Page[Item]{}, err
+	}
+	return dal.NewPage(rows, size, func(last Item) (string, error) {
+		return dal.EncodeToken(shape, filters, last.ID)
+	})
+}
+
+// ListItemsByTenantAndCreatedAt implements defaults.v1.ItemStore.ListItemsByTenantAndCreatedAt.
+func (r *itemRepository) ListItemsByTenantAndCreatedAt(ctx context.Context, p ItemListItemsByTenantAndCreatedAtParams) (dal.Page[Item], error) {
+	const shape = "ItemListItemsByTenantAndCreatedAt:[created_at, id]"
+	size := dal.PageSize(p.PageSize, 50, 100)
+	filters := []any{p.TenantID, p.CreatedAtFrom, p.CreatedAtTo}
+	var afterCreatedAt time.Time
+	var afterID uuid.UUID
+	if p.PageToken != "" {
+		if err := dal.DecodeToken(p.PageToken, shape, filters, &afterCreatedAt, &afterID); err != nil {
+			return dal.Page[Item]{}, dalpg.NewError(_opItemListItemsByTenantAndCreatedAt, err)
+		}
+	}
+	var rows []Item
+	err := r.run.Read(ctx, _opItemListItemsByTenantAndCreatedAt, false, func(ctx context.Context, q dalpg.DBTX) error {
+		var err error
+		if p.PageToken == "" {
+			rows, err = sqlcdb.New(q).ItemListItemsByTenantAndCreatedAt(ctx, sqlcdb.ItemListItemsByTenantAndCreatedAtParams{TenantID: p.TenantID, CreatedAtFrom: p.CreatedAtFrom, CreatedAtTo: p.CreatedAtTo, PageLimit: size + 1})
+		} else {
+			rows, err = sqlcdb.New(q).ItemListItemsByTenantAndCreatedAtAfter(ctx, sqlcdb.ItemListItemsByTenantAndCreatedAtAfterParams{TenantID: p.TenantID, CreatedAtFrom: p.CreatedAtFrom, CreatedAtTo: p.CreatedAtTo, AfterCreatedAt: afterCreatedAt, AfterID: afterID, PageLimit: size + 1})
+		}
+		return err
+	})
+	if err != nil {
+		return dal.Page[Item]{}, err
+	}
+	return dal.NewPage(rows, size, func(last Item) (string, error) {
+		return dal.EncodeToken(shape, filters, last.CreatedAt, last.ID)
+	})
+}
+
+// ListItemsByTenantNewest implements defaults.v1.ItemStore.ListItemsByTenantNewest.
+func (r *itemRepository) ListItemsByTenantNewest(ctx context.Context, p ItemListItemsByTenantNewestParams) (dal.Page[Item], error) {
+	const shape = "ItemListItemsByTenantNewest:[created_at DESC, id]"
+	size := dal.PageSize(p.PageSize, 50, 500)
+	filters := []any{p.TenantID}
+	var afterCreatedAt time.Time
+	var afterID uuid.UUID
+	if p.PageToken != "" {
+		if err := dal.DecodeToken(p.PageToken, shape, filters, &afterCreatedAt, &afterID); err != nil {
+			return dal.Page[Item]{}, dalpg.NewError(_opItemListItemsByTenantNewest, err)
+		}
+	}
+	var rows []Item
+	err := r.run.Read(ctx, _opItemListItemsByTenantNewest, false, func(ctx context.Context, q dalpg.DBTX) error {
+		var err error
+		if p.PageToken == "" {
+			rows, err = sqlcdb.New(q).ItemListItemsByTenantNewest(ctx, sqlcdb.ItemListItemsByTenantNewestParams{TenantID: p.TenantID, PageLimit: size + 1})
+		} else {
+			rows, err = sqlcdb.New(q).ItemListItemsByTenantNewestAfter(ctx, sqlcdb.ItemListItemsByTenantNewestAfterParams{TenantID: p.TenantID, AfterCreatedAt: afterCreatedAt, AfterID: afterID, PageLimit: size + 1})
+		}
+		return err
+	})
+	if err != nil {
+		return dal.Page[Item]{}, err
+	}
+	return dal.NewPage(rows, size, func(last Item) (string, error) {
+		return dal.EncodeToken(shape, filters, last.CreatedAt, last.ID)
+	})
 }
 
 // CreateItem implements defaults.v1.ItemStore.CreateItem.
@@ -109,6 +204,74 @@ func (r *itemRepository) UpdateItem(ctx context.Context, p ItemUpdateItemParams)
 	return out, err
 }
 
+// UpsertItem implements defaults.v1.ItemStore.UpsertItem.
+func (r *itemRepository) UpsertItem(ctx context.Context, p ItemUpsertItemParams) (Item, error) {
+	if p.TenantID == nil {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return Item{}, dalpg.NewError(_opItemUpsertItem, err)
+		}
+		p.TenantID = &id
+	}
+	if p.ID == nil {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return Item{}, dalpg.NewError(_opItemUpsertItem, err)
+		}
+		p.ID = &id
+	}
+	if p.Sku == nil {
+		return Item{}, dalpg.NewError(_opItemUpsertItem, &dal.MissingFieldError{Field: "sku"})
+	}
+	if p.Name == nil {
+		return Item{}, dalpg.NewError(_opItemUpsertItem, &dal.MissingFieldError{Field: "name"})
+	}
+	var out Item
+	err := r.run.Write(ctx, _opItemUpsertItem, func(ctx context.Context, q dalpg.DBTX) error {
+		var err error
+		out, err = sqlcdb.New(q).ItemUpsertItem(ctx, p)
+		if dalpg.IsNoRows(err) {
+			return dal.ErrAlreadyExists
+		}
+		return err
+	})
+	return out, err
+}
+
+// UpsertItemBySku implements defaults.v1.ItemStore.UpsertItemBySku.
+func (r *itemRepository) UpsertItemBySku(ctx context.Context, p ItemUpsertItemBySkuParams) (Item, error) {
+	if p.TenantID == nil {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return Item{}, dalpg.NewError(_opItemUpsertItemBySku, err)
+		}
+		p.TenantID = &id
+	}
+	if p.ID == nil {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return Item{}, dalpg.NewError(_opItemUpsertItemBySku, err)
+		}
+		p.ID = &id
+	}
+	if p.Sku == nil {
+		return Item{}, dalpg.NewError(_opItemUpsertItemBySku, &dal.MissingFieldError{Field: "sku"})
+	}
+	if p.Name == nil {
+		return Item{}, dalpg.NewError(_opItemUpsertItemBySku, &dal.MissingFieldError{Field: "name"})
+	}
+	var out Item
+	err := r.run.Write(ctx, _opItemUpsertItemBySku, func(ctx context.Context, q dalpg.DBTX) error {
+		var err error
+		out, err = sqlcdb.New(q).ItemUpsertItemBySku(ctx, p)
+		if dalpg.IsNoRows(err) {
+			return dal.ErrAlreadyExists
+		}
+		return err
+	})
+	return out, err
+}
+
 // DeleteItem implements defaults.v1.ItemStore.DeleteItem.
 func (r *itemRepository) DeleteItem(ctx context.Context, p ItemDeleteItemParams) (Item, error) {
 	var out Item
@@ -118,4 +281,31 @@ func (r *itemRepository) DeleteItem(ctx context.Context, p ItemDeleteItemParams)
 		return err
 	})
 	return out, err
+}
+
+var _opWithTx = dal.Op{Entity: "defaultsdal", Method: "WithTx", Kind: dal.OpTx, Idempotent: false}
+
+// Tx gives this package's repositories inside one transaction.
+type Tx struct{ run *dalpg.Runner }
+
+// Item returns the defaults.v1.ItemStore repository, bound to the transaction.
+func (tx Tx) Item() ItemRepository {
+	return &itemRepository{run: tx.run}
+}
+
+// Queries returns sqlc's queries bound to the transaction, so custom
+// queries (queries/custom) can run in it too.
+func (tx Tx) Queries() *sqlcdb.Queries {
+	return sqlcdb.New(tx.run.Conn())
+}
+
+// WithTx runs fn in a transaction on the writer pool and commits if it
+// returns nil. Statements inside aren't retried on their own. The whole
+// transaction is retried, re-running fn, only when Postgres rolled it back
+// (serialization failure, deadlock), never after an ambiguous failure; keep
+// side effects outside the database out of fn.
+func WithTx(ctx context.Context, run *dalpg.Runner, fn func(ctx context.Context, tx Tx) error) error {
+	return run.InTx(ctx, _opWithTx, func(ctx context.Context, txRun *dalpg.Runner) error {
+		return fn(ctx, Tx{run: txRun})
+	})
 }

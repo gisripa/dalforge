@@ -1,0 +1,59 @@
+// DAL202: a declared order_by contradicts an explicit index on the same eq fields.
+syntax = "proto3";
+
+package dal202;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Post {
+  option (dal.pg.v1.table) = {
+    indexes: [{name: "posts_by_author", columns: ["author_id", "created_at DESC"]}]
+  };
+
+  string id = 1 [(dal.v1.field) = {primary_key: true, format: FORMAT_UUID}];
+  string author_id = 2;
+  google.protobuf.Timestamp created_at = 3;
+  string title = 4;
+}
+
+message ByAuthor {
+  string author_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message PostPage {
+  repeated Post posts = 1;
+  string next_page_token = 2;
+}
+
+service PostStore {
+  option (dal.v1.store) = {entity: "Post"};
+  rpc ListPostsByAuthorTitle(ByAuthor) returns (PostPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["author_id"]
+        order_by: ["title"]
+      }
+    };
+  }
+  // Controls: the index's order, and the same order read backwards.
+  rpc ListPostsByAuthorNewest(ByAuthor) returns (PostPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["author_id"]
+        order_by: ["created_at DESC"]
+      }
+    };
+  }
+  rpc ListPostsByAuthorOldest(ByAuthor) returns (PostPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["author_id"]
+        order_by: ["created_at"]
+      }
+    };
+  }
+}

@@ -17,13 +17,63 @@ WHERE sku = @sku
   AND deleted_at IS NULL;
 
 -- defaults.v1.ItemStore.ListItemsByTenant (list)
--- ItemListItemsByTenant: not generated yet (list queries arrive in phase 2).
+-- name: ItemListItemsByTenant :many
+SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+FROM item
+WHERE tenant_id = @tenant_id
+  AND deleted_at IS NULL
+ORDER BY id
+LIMIT sqlc.arg(page_limit)::int;
+
+-- name: ItemListItemsByTenantAfter :many
+SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+FROM item
+WHERE tenant_id = @tenant_id
+  AND deleted_at IS NULL
+  AND (id) > (sqlc.arg(after_id)::uuid)
+ORDER BY id
+LIMIT sqlc.arg(page_limit)::int;
 
 -- defaults.v1.ItemStore.ListItemsByTenantAndCreatedAt (list)
--- ItemListItemsByTenantAndCreatedAt: not generated yet (list queries arrive in phase 2).
+-- name: ItemListItemsByTenantAndCreatedAt :many
+SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+FROM item
+WHERE tenant_id = @tenant_id
+  AND deleted_at IS NULL
+  AND created_at >= sqlc.arg(created_at_from)::timestamptz
+  AND created_at < sqlc.arg(created_at_to)::timestamptz
+ORDER BY created_at, id
+LIMIT sqlc.arg(page_limit)::int;
+
+-- name: ItemListItemsByTenantAndCreatedAtAfter :many
+SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+FROM item
+WHERE tenant_id = @tenant_id
+  AND deleted_at IS NULL
+  AND created_at >= sqlc.arg(created_at_from)::timestamptz
+  AND created_at < sqlc.arg(created_at_to)::timestamptz
+  AND (created_at, id) > (sqlc.arg(after_created_at)::timestamptz, sqlc.arg(after_id)::uuid)
+ORDER BY created_at, id
+LIMIT sqlc.arg(page_limit)::int;
 
 -- defaults.v1.ItemStore.ListItemsByTenantNewest (list)
--- ItemListItemsByTenantNewest: not generated yet (list queries arrive in phase 2).
+-- name: ItemListItemsByTenantNewest :many
+SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+FROM item
+WHERE tenant_id = @tenant_id
+  AND deleted_at IS NULL
+ORDER BY created_at DESC, id
+LIMIT sqlc.arg(page_limit)::int;
+
+-- name: ItemListItemsByTenantNewestAfter :many
+SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+FROM item
+WHERE tenant_id = @tenant_id
+  AND deleted_at IS NULL
+  AND ((created_at < sqlc.arg(after_created_at)::timestamptz)
+    OR (created_at = sqlc.arg(after_created_at)::timestamptz AND id > sqlc.arg(after_id)::uuid))
+ORDER BY created_at DESC, id
+LIMIT sqlc.arg(page_limit)::int;
 
 -- defaults.v1.ItemStore.CreateItem (create)
 -- name: ItemCreateItem :one
@@ -46,10 +96,28 @@ WHERE tenant_id = @tenant_id
 RETURNING tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at;
 
 -- defaults.v1.ItemStore.UpsertItem (upsert)
--- ItemUpsertItem: not generated yet (upsert queries arrive in phase 2).
+-- name: ItemUpsertItem :one
+INSERT INTO item (tenant_id, id, sku, name, color, version, created_at, updated_at)
+VALUES (sqlc.narg(tenant_id)::uuid, sqlc.narg(id)::uuid, sqlc.narg(sku)::text, sqlc.narg(name)::text, sqlc.narg(color)::text, 1, now(), now())
+ON CONFLICT (tenant_id, id) DO UPDATE
+SET sku = EXCLUDED.sku,
+    name = EXCLUDED.name,
+    color = EXCLUDED.color,
+    updated_at = now(),
+    version = item.version + 1
+WHERE item.deleted_at IS NULL
+RETURNING tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at;
 
 -- defaults.v1.ItemStore.UpsertItemBySku (upsert)
--- ItemUpsertItemBySku: not generated yet (upsert queries arrive in phase 2).
+-- name: ItemUpsertItemBySku :one
+INSERT INTO item (tenant_id, id, sku, name, color, version, created_at, updated_at)
+VALUES (sqlc.narg(tenant_id)::uuid, sqlc.narg(id)::uuid, sqlc.narg(sku)::text, sqlc.narg(name)::text, sqlc.narg(color)::text, 1, now(), now())
+ON CONFLICT (sku) WHERE deleted_at IS NULL DO UPDATE
+SET name = EXCLUDED.name,
+    updated_at = now(),
+    version = item.version + 1
+WHERE item.deleted_at IS NULL
+RETURNING tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at;
 
 -- defaults.v1.ItemStore.DeleteItem (delete)
 -- name: ItemDeleteItem :one

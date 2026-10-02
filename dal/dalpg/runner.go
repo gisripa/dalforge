@@ -112,6 +112,15 @@ func (r *Runner) run(ctx context.Context, op dal.Op, pool Pool, fn func(context.
 	})
 }
 
+// Conn returns the transaction a transaction-bound Runner (from InTx) runs
+// on, so custom sqlc queries can join it; nil outside a transaction.
+func (r *Runner) Conn() DBTX {
+	if r.tx == nil {
+		return nil
+	}
+	return r.tx
+}
+
 // InTx runs fn in a transaction on the writer pool and commits if it returns
 // nil. fn gets a Runner bound to the transaction, which generated
 // repositories use for their statements. The whole transaction is retried by

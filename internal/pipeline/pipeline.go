@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/gisripa/dalforge/internal/config"
 	"github.com/gisripa/dalforge/internal/diag"
 	"github.com/gisripa/dalforge/internal/idl"
+	"github.com/gisripa/dalforge/internal/ir"
 )
 
 // Plan is what a run would produce, before anything touches disk.
@@ -80,11 +82,64 @@ func Build(ctx context.Context, cfg *config.Config) (*Plan, error) {
 		DALRoot:   cfg.Out.DAL,
 	})
 	plan.Diags = append(plan.Diags, d...)
+	collisions, err := customCollisions(cfg, out)
+	if err != nil {
+		return nil, err
+	}
+	plan.Diags = append(plan.Diags, collisions...)
 	plan.Diags.Sort()
 	if !plan.Diags.HasErrors() {
 		plan.Files = out
 	}
 	return plan, nil
+}
+
+// _queryName matches sqlc's query annotation, e.g. "-- name: OrderGet :one".
+var _queryName = regexp.MustCompile(`^--\s*name:\s*(\S+)`)
+
+// customCollisions reports custom sqlc queries whose names collide with
+// generated ones (DAL205); sqlc would otherwise fail with a less helpful
+// duplicate-name error.
+func customCollisions(cfg *config.Config, out map[string][]byte) (diag.List, error) {
+	generated := map[string]bool{}
+	prefix := strings.TrimSuffix(filepath.ToSlash(cfg.Out.Queries), "/") + "/"
+	for rel, body := range out {
+		if !strings.HasPrefix(rel, prefix) {
+			continue
+		}
+		for _, line := range strings.Split(string(body), "\n") {
+			if m := _queryName.FindStringSubmatch(line); m != nil {
+				generated[m[1]] = true
+			}
+		}
+	}
+
+	var diags diag.List
+	dir := cfg.Path(cfg.Out.Custom)
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			return nil, err
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			if m := _queryName.FindStringSubmatch(line); m != nil && generated[m[1]] {
+				diags.Add(pg.RuleQueryName, diag.Error,
+					ir.Pos{File: filepath.ToSlash(filepath.Join(cfg.Out.Custom, e.Name())), Line: i + 1, Col: 1},
+					"custom query %s has the same name as a generated query; rename the custom query", m[1])
+			}
+		}
+	}
+	return diags, nil
 }
 
 // protoFiles lists the input files, relative to the proto roots: the

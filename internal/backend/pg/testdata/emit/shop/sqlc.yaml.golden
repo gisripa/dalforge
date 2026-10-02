@@ -28,10 +28,14 @@ sql:
           - column: accounts.name
             go_type:
               type: string
-          # insert parameters (cast, nullable): every field is a pointer
+          # cast parameters: nullable → pointer, required → value
           - db_type: uuid
             nullable: true
             go_type:
               import: github.com/google/uuid
               type: UUID
               pointer: true
+          - db_type: uuid
+            go_type:
+              import: github.com/google/uuid
+              type: UUID

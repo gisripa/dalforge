@@ -1,0 +1,58 @@
+// DAL104: get.by / upsert.conflict_on must be backed by a unique constraint.
+syntax = "proto3";
+
+package dal104;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Account {
+  option (dal.pg.v1.table) = {
+    indexes: [{columns: ["tenant_id", "handle"], unique: true}]
+  };
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+  string email = 2 [(dal.v1.field).unique = true];
+  string tenant_id = 3;
+  string handle = 4;
+  string name = 5;
+}
+
+message ByName {
+  string name = 1;
+}
+
+message ByEmail {
+  string email = 1;
+}
+
+message ByHandle {
+  string tenant_id = 1;
+  string handle = 2;
+}
+
+service AccountStore {
+  option (dal.v1.store) = {entity: "Account"};
+  rpc GetAccountByName(ByName) returns (Account) {
+    option (dal.v1.query) = {
+      get: {by: ["name"]}
+    };
+  }
+  rpc UpsertAccountByName(Account) returns (Account) {
+    option (dal.v1.query) = {
+      upsert: {conflict_on: ["name"]}
+    };
+  }
+  // Controls: a unique field, and a unique index.
+  rpc GetAccountByEmail(ByEmail) returns (Account) {
+    option (dal.v1.query) = {
+      get: {by: ["email"]}
+    };
+  }
+  rpc GetAccountByHandle(ByHandle) returns (Account) {
+    option (dal.v1.query) = {
+      get: {by: ["handle", "tenant_id"]}
+    };
+  }
+}

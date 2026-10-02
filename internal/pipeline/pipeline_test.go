@@ -220,3 +220,16 @@ func TestGenerateWithoutQueriesSkipsSQLC(t *testing.T) {
 		t.Errorf("summary = %+v, %v; want sqlc skipped", sum, err)
 	}
 }
+
+func TestCustomQueryNameCollision(t *testing.T) {
+	cfg := project(t, _yaml, "orders/v1/orders.proto")
+	write(t, cfg.Path("queries/custom/mine.sql"), "-- a report\n-- name: OrderGetById :one\nSELECT 1;\n-- name: OrderReport :many\nSELECT 1;\n")
+	plan, err := Build(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := plan.Diags.String()
+	if !strings.Contains(got, "queries/custom/mine.sql:2:1: error DAL205: custom query OrderGetById") || strings.Contains(got, "OrderReport") || len(plan.Files) != 0 {
+		t.Errorf("findings =\n%s\nwant one DAL205 at mine.sql:2 and no files", got)
+	}
+}

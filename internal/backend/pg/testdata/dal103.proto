@@ -1,0 +1,54 @@
+// DAL103 (warning): a list without order_by falls back to a primary key that isn't time-ordered.
+syntax = "proto3";
+
+package dal103;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Tag {
+  string code = 1 [(dal.v1.field).primary_key = true];
+  string owner_id = 2;
+}
+
+message Event {
+  string id = 1 [(dal.v1.field) = {primary_key: true, format: FORMAT_UUID}];
+  string owner_id = 2;
+}
+
+message ByOwner {
+  string owner_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message TagPage {
+  repeated Tag tags = 1;
+  string next_page_token = 2;
+}
+
+message EventPage {
+  repeated Event events = 1;
+  string next_page_token = 2;
+}
+
+service TagStore {
+  option (dal.v1.store) = {entity: "Tag"};
+  // Sorted by code, a text key: stable, but in no meaningful order.
+  rpc ListTagsByOwner(ByOwner) returns (TagPage) {
+    option (dal.v1.query) = {
+      list: {eq: ["owner_id"]}
+    };
+  }
+}
+
+service EventStore {
+  option (dal.v1.store) = {entity: "Event"};
+  // Control: a UUID key is UUIDv7, so its order is creation order.
+  rpc ListEventsByOwner(ByOwner) returns (EventPage) {
+    option (dal.v1.query) = {
+      list: {eq: ["owner_id"]}
+    };
+  }
+}

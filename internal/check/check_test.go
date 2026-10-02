@@ -21,7 +21,7 @@ func findings(t *testing.T, importPath, file string) string {
 // TestRules pins the findings for one fixture per rule. Each fixture should
 // trigger only its own rule; valid controls inside it must stay silent.
 func TestRules(t *testing.T) {
-	for _, rule := range []string{"dal107", "dal110", "dal117", "dal118"} {
+	for _, rule := range []string{"dal107", "dal110", "dal117", "dal118", "lists"} {
 		t.Run(rule, func(t *testing.T) {
 			golden.Assert(t, rule, []byte(findings(t, "testdata", rule+".proto")))
 		})

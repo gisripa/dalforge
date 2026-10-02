@@ -8,18 +8,8 @@ import (
 )
 
 type Querier interface {
-	// defaults.v1.ItemStore.ListItemsByTenant (list)
-	// ItemListItemsByTenant: not generated yet (list queries arrive in phase 2).
-	// defaults.v1.ItemStore.ListItemsByTenantAndCreatedAt (list)
-	// ItemListItemsByTenantAndCreatedAt: not generated yet (list queries arrive in phase 2).
-	// defaults.v1.ItemStore.ListItemsByTenantNewest (list)
-	// ItemListItemsByTenantNewest: not generated yet (list queries arrive in phase 2).
 	// defaults.v1.ItemStore.CreateItem (create)
 	ItemCreateItem(ctx context.Context, arg ItemCreateItemParams) (Item, error)
-	// defaults.v1.ItemStore.UpsertItem (upsert)
-	// ItemUpsertItem: not generated yet (upsert queries arrive in phase 2).
-	// defaults.v1.ItemStore.UpsertItemBySku (upsert)
-	// ItemUpsertItemBySku: not generated yet (upsert queries arrive in phase 2).
 	// defaults.v1.ItemStore.DeleteItem (delete)
 	ItemDeleteItem(ctx context.Context, arg ItemDeleteItemParams) (Item, error)
 	// defaults.v1.ItemStore: existence check, used to tell a stale version from a missing row
@@ -30,8 +20,21 @@ type Querier interface {
 	ItemGetItem(ctx context.Context, arg ItemGetItemParams) (Item, error)
 	// defaults.v1.ItemStore.GetItemBySku (get)
 	ItemGetItemBySku(ctx context.Context, sku string) (Item, error)
+	// defaults.v1.ItemStore.ListItemsByTenant (list)
+	ItemListItemsByTenant(ctx context.Context, arg ItemListItemsByTenantParams) ([]Item, error)
+	ItemListItemsByTenantAfter(ctx context.Context, arg ItemListItemsByTenantAfterParams) ([]Item, error)
+	// defaults.v1.ItemStore.ListItemsByTenantAndCreatedAt (list)
+	ItemListItemsByTenantAndCreatedAt(ctx context.Context, arg ItemListItemsByTenantAndCreatedAtParams) ([]Item, error)
+	ItemListItemsByTenantAndCreatedAtAfter(ctx context.Context, arg ItemListItemsByTenantAndCreatedAtAfterParams) ([]Item, error)
+	// defaults.v1.ItemStore.ListItemsByTenantNewest (list)
+	ItemListItemsByTenantNewest(ctx context.Context, arg ItemListItemsByTenantNewestParams) ([]Item, error)
+	ItemListItemsByTenantNewestAfter(ctx context.Context, arg ItemListItemsByTenantNewestAfterParams) ([]Item, error)
 	// defaults.v1.ItemStore.UpdateItem (update)
 	ItemUpdateItem(ctx context.Context, arg ItemUpdateItemParams) (Item, error)
+	// defaults.v1.ItemStore.UpsertItem (upsert)
+	ItemUpsertItem(ctx context.Context, arg ItemUpsertItemParams) (Item, error)
+	// defaults.v1.ItemStore.UpsertItemBySku (upsert)
+	ItemUpsertItemBySku(ctx context.Context, arg ItemUpsertItemBySkuParams) (Item, error)
 }
 
 var _ Querier = (*Queries)(nil)

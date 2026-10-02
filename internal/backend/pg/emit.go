@@ -130,6 +130,9 @@ func emitSchema(s *ir.Schema, m *Schema) []byte {
 			}
 		}
 		for _, idx := range t.Indexes {
+			if idx.Derived {
+				fmt.Fprintf(&b, "\n-- derived for: %s", strings.Join(idx.For, ", "))
+			}
 			b.WriteString("\n" + createIndex(t, idx) + "\n")
 		}
 	}

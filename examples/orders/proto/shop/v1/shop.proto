@@ -61,6 +61,15 @@ service AccountStore {
       get: {by: ["email"]}
     };
   }
+  // Insert, or update the name of the account with this email.
+  rpc UpsertAccountByEmail(Account) returns (Account) {
+    option (dal.v1.query) = {
+      upsert: {
+        conflict_on: ["email"]
+        columns: ["name"]
+      }
+    };
+  }
 }
 
 service OrderStore {
@@ -86,6 +95,47 @@ service OrderStore {
       delete: {}
     };
   }
+
+  // The ESR ladder: each filter combination is its own rpc, and dalforge
+  // derives the index each one needs (equality fields first, then the
+  // range/sort field, then the key as tie-breaker). See schema/schema.sql.
+
+  // An account's order history, newest first.
+  rpc ListOrdersByAccount(ByAccount) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["account_id"]
+        order_by: ["created_at DESC"]
+      }
+    };
+  }
+  // Orders in a status, newest first.
+  rpc ListOrdersByStatus(ByStatus) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["status"]
+        order_by: ["created_at DESC"]
+      }
+    };
+  }
+  // Orders in a status, within a time window (oldest first).
+  rpc ListOrdersByStatusAndCreatedAt(ByStatusInWindow) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["status"]
+        range: "created_at"
+      }
+    };
+  }
+  // One account's orders in a status, within a time window.
+  rpc ListOrdersByAccountAndStatusAndCreatedAt(ByAccountStatusInWindow) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["account_id", "status"]
+        range: "created_at"
+      }
+    };
+  }
 }
 
 message AccountKey {
@@ -98,4 +148,38 @@ message EmailKey {
 
 message OrderKey {
   string id = 1;
+}
+
+message ByAccount {
+  string account_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ByStatus {
+  string status = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ByStatusInWindow {
+  string status = 1;
+  google.protobuf.Timestamp created_at_from = 2;
+  google.protobuf.Timestamp created_at_to = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ByAccountStatusInWindow {
+  string account_id = 1;
+  string status = 2;
+  google.protobuf.Timestamp created_at_from = 3;
+  google.protobuf.Timestamp created_at_to = 4;
+  int32 page_size = 5;
+  string page_token = 6;
+}
+
+message OrderPage {
+  repeated Order orders = 1;
+  string next_page_token = 2;
 }

@@ -3,6 +3,9 @@ package pg
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -36,9 +39,11 @@ func TestModelGolden(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			model, diags := build(t, "../../idl/testdata", tt.file, Target{})
-			if len(diags) > 0 {
-				t.Fatalf("unexpected findings:\n%s", diags)
+			if diags.HasErrors() {
+				t.Fatalf("unexpected errors:\n%s", diags)
 			}
+			// Warnings and info (e.g. index-sharing hints) are pinned too.
+			golden.Assert(t, "model/"+tt.name+".findings", []byte(diags.String()))
 			b, err := json.MarshalIndent(model, "", "  ")
 			if err != nil {
 				t.Fatal(err)
@@ -51,7 +56,7 @@ func TestModelGolden(t *testing.T) {
 // TestRules pins the findings for one fixture per rule. Valid controls inside
 // each fixture must stay silent.
 func TestRules(t *testing.T) {
-	for _, rule := range []string{"dal204", "dal207", "dal208", "dal209", "dal210", "dal211", "dal212"} {
+	for _, rule := range []string{"dal204", "dal207", "dal208", "dal209", "dal210", "dal211", "dal212", "dal103", "dal104", "dal201", "dal202", "dal203", "dal206"} {
 		t.Run(rule, func(t *testing.T) {
 			_, diags := build(t, "testdata", rule+".proto", Target{Major: 16})
 			for _, d := range diags {
@@ -62,6 +67,25 @@ func TestRules(t *testing.T) {
 			golden.Assert(t, "rules/"+rule, []byte(diags.String()))
 		})
 	}
+}
+
+// TestAccessPaths pins each list's keyset and serving index, and the
+// derived indexes after merging.
+func TestAccessPaths(t *testing.T) {
+	model, diags := build(t, "testdata", "paths.proto", Target{Major: 16})
+	if diags.HasErrors() {
+		t.Fatalf("unexpected errors:\n%s", diags)
+	}
+	var b strings.Builder
+	b.WriteString(diags.String())
+	for _, key := range slices.Sorted(maps.Keys(model.Paths)) {
+		p := model.Paths[key]
+		fmt.Fprintf(&b, "%s: eq=%v range=%q keys=%s mixed=%t index=%s\n", key, p.Eq, p.Range, sortKeys(p.Keys), p.Mixed, p.Index)
+	}
+	for _, idx := range model.Tables[0].Indexes {
+		fmt.Fprintf(&b, "%s for=%v\n", createIndex(model.Tables[0], idx), idx.For)
+	}
+	golden.Assert(t, "paths", []byte(b.String()))
 }
 
 func TestTargetBelowFloor(t *testing.T) {

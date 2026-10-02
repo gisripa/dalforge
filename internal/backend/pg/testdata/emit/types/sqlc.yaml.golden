@@ -132,20 +132,31 @@ sql:
           - column: http_request_log.client_ip
             go_type:
               type: string
-          # insert parameters (cast, nullable): every field is a pointer
+          # cast parameters: nullable → pointer, required → value
           - db_type: pg_catalog.numeric
             nullable: true
             go_type:
               type: string
               pointer: true
+          - db_type: pg_catalog.numeric
+            go_type:
+              type: string
           - db_type: timestamptz
             nullable: true
             go_type:
               import: time
               type: Time
               pointer: true
+          - db_type: timestamptz
+            go_type:
+              import: time
+              type: Time
           - db_type: jsonb
             nullable: true
+            go_type:
+              import: encoding/json
+              type: RawMessage
+          - db_type: jsonb
             go_type:
               import: encoding/json
               type: RawMessage
@@ -155,20 +166,35 @@ sql:
               import: github.com/google/uuid
               type: UUID
               pointer: true
+          - db_type: uuid
+            go_type:
+              import: github.com/google/uuid
+              type: UUID
           - db_type: vector
             nullable: true
             go_type:
               import: github.com/pgvector/pgvector-go
               type: Vector
               pointer: true
+          - db_type: vector
+            go_type:
+              import: github.com/pgvector/pgvector-go
+              type: Vector
           - db_type: date
             nullable: true
             go_type:
               import: time
               type: Time
               pointer: true
+          - db_type: date
+            go_type:
+              import: time
+              type: Time
           - db_type: inet
             nullable: true
             go_type:
               type: string
               pointer: true
+          - db_type: inet
+            go_type:
+              type: string

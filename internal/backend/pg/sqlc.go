@@ -56,10 +56,17 @@ sql:
 
 	nullable, _ := nullableTypes(m)
 	if len(nullable) > 0 {
-		b.WriteString("          # insert parameters (cast, nullable): every field is a pointer\n")
+		// Cast parameters aren't traced to a column, so their type comes from
+		// db_type overrides: nullable casts (insert/update fields) become
+		// pointers, required casts (range bounds, keyset cursors) plain values.
+		b.WriteString("          # cast parameters: nullable → pointer, required → value\n")
 		for _, n := range nullable {
 			fmt.Fprintf(&b, "          - db_type: %s\n            nullable: true\n            go_type:\n", sqlcTypeName(n.dbType))
 			writeGoType(&b, n.goType)
+			value := n.goType
+			value.Pointer = false
+			fmt.Fprintf(&b, "          - db_type: %s\n            go_type:\n", sqlcTypeName(n.dbType))
+			writeGoType(&b, value)
 		}
 	}
 	return []byte(b.String())

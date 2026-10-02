@@ -1,0 +1,3 @@
+defaults/v1/defaults.proto:53:3: info DAL206: rpc ListItemsByTenant and ListItemsByTenantAndCreatedAt filter by the same fields [tenant_id] but sort differently ([id] vs [created_at, id]), so each needs its own index; aligning order_by would let them share one
+defaults/v1/defaults.proto:62:3: warning DAL203: rpc ListItemsByTenantNewest sorts in mixed directions [created_at DESC, id]; the keyset predicate can't use a single row comparison, so it is expanded into ORs, which Postgres plans less efficiently
+defaults/v1/defaults.proto:62:3: info DAL206: rpc ListItemsByTenant and ListItemsByTenantNewest filter by the same fields [tenant_id] but sort differently ([id] vs [created_at DESC, id]), so each needs its own index; aligning order_by would let them share one

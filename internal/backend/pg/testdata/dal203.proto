@@ -1,0 +1,38 @@
+// DAL203 (warning): mixed sort directions need the expanded-OR keyset predicate.
+syntax = "proto3";
+
+package dal203;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Score {
+  string id = 1 [(dal.v1.field) = {primary_key: true, format: FORMAT_UUID}];
+  string game_id = 2;
+  int64 points = 3;
+  string player = 4;
+}
+
+message ByGame {
+  string game_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ScorePage {
+  repeated Score scores = 1;
+  string next_page_token = 2;
+}
+
+service ScoreStore {
+  option (dal.v1.store) = {entity: "Score"};
+  rpc ListScoresByGame(ByGame) returns (ScorePage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["game_id"]
+        order_by: ["points DESC", "player"]
+      }
+    };
+  }
+}

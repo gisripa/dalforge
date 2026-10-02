@@ -108,11 +108,96 @@
         "tenant_id",
         "id"
       ],
+      "indexes": [
+        {
+          "name": "item_tenant_id_created_at_id_idx",
+          "columns": [
+            {
+              "column": "tenant_id"
+            },
+            {
+              "column": "created_at"
+            },
+            {
+              "column": "id"
+            }
+          ],
+          "where": "deleted_at IS NULL",
+          "derived": true,
+          "for": [
+            "ListItemsByTenantAndCreatedAt"
+          ]
+        },
+        {
+          "name": "item_tenant_id_created_at_desc_id_idx",
+          "columns": [
+            {
+              "column": "tenant_id"
+            },
+            {
+              "column": "created_at",
+              "desc": true
+            },
+            {
+              "column": "id"
+            }
+          ],
+          "where": "deleted_at IS NULL",
+          "derived": true,
+          "for": [
+            "ListItemsByTenantNewest"
+          ]
+        }
+      ],
       "pos": {
         "file": "defaults/v1/defaults.proto",
         "line": 10,
         "col": 1
       }
     }
-  ]
+  ],
+  "paths": {
+    "ItemStore.ListItemsByTenant": {
+      "eq": [
+        "tenant_id"
+      ],
+      "keys": [
+        {
+          "field": "id"
+        }
+      ],
+      "index": "primary key"
+    },
+    "ItemStore.ListItemsByTenantAndCreatedAt": {
+      "eq": [
+        "tenant_id"
+      ],
+      "range": "created_at",
+      "keys": [
+        {
+          "field": "created_at"
+        },
+        {
+          "field": "id"
+        }
+      ],
+      "index": "item_tenant_id_created_at_id_idx"
+    },
+    "ItemStore.ListItemsByTenantNewest": {
+      "eq": [
+        "tenant_id"
+      ],
+      "keys": [
+        {
+          "field": "created_at",
+          "desc": true
+        },
+        {
+          "field": "id"
+        }
+      ],
+      "mixed": true,
+      "index": "item_tenant_id_created_at_desc_id_idx"
+    }
+  }
 }

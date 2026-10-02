@@ -81,10 +81,11 @@ func emitDAL(s *ir.Schema, m *Schema, layout Layout) (map[string][]byte, diag.Li
 			if e == nil || t == nil {
 				continue
 			}
-			ms := methods(st, e, t)
+			ms := methods(st, e, t, m.Paths)
 			api.store(st, ms, layout.Package)
 			impl.repository(st, e, t, ms, layout.Package)
 		}
+		impl.tx(p.stores, name, layout.Package)
 
 		for file, g := range map[string]*goFile{"dal.go": api, "repository.go": impl} {
 			src, err := g.render()
@@ -160,7 +161,19 @@ type method struct {
 	noModel bool   // returns only error (Delete without an entity response)
 	execRow bool   // sqlc :execrows (Delete without an entity response)
 	pending bool   // kind not generated yet (List, Upsert: phase 2)
-	nilDoc  string // Create/Update: what nil means per written field
+	nilDoc  string // Create/Update/Upsert: what nil means per written field
+	path    *AccessPath
+	list    *ir.List // List: the spec
+	upsert  bool
+	t       *Table
+}
+
+// fieldType is a field's Go type in the model.
+func (m method) fieldType(field string) GoType {
+	if c := column(m.t, field); c != nil {
+		return c.GoType
+	}
+	return GoType{Name: "any"}
 }
 
 type param struct {
@@ -170,11 +183,11 @@ type param struct {
 
 // methods builds the method descriptions of a store, mirroring the SQL
 // emitter's parameters so the signatures match sqlc's.
-func methods(st *ir.Store, e *ir.Entity, t *Table) []method {
+func methods(st *ir.Store, e *ir.Entity, t *Table, paths map[string]*AccessPath) []method {
 	short := storeShort(st)
 	var out []method
 	for _, q := range st.Queries {
-		m := method{q: q, rpc: q.Method, sqlc: short + q.Method, model: modelName(t)}
+		m := method{q: q, rpc: q.Method, sqlc: short + q.Method, model: modelName(t), t: t}
 		byColumn := func(fields []string) {
 			for _, f := range fields {
 				if c := column(t, f); c != nil {
@@ -209,8 +222,25 @@ func methods(st *ir.Store, e *ir.Entity, t *Table) []method {
 		case *ir.Delete:
 			byColumn(e.PrimaryKey())
 			m.noModel, m.execRow = !q.Response.Entity, !q.Response.Entity
+		case *ir.List:
+			m.read, m.strong = true, s.Consistency == ir.ConsistencyStrong
+			m.list, m.path = s, paths[storeShortName(st)+"."+q.Method]
+			if m.path == nil {
+				m.pending = true
+			}
+			m.alias = m.sqlc + "Params" // dalforge-owned (not a sqlc alias)
+			out = append(out, m)
+			continue
+		case *ir.Upsert:
+			m.upsert = true
+			m.nilDoc = createNilDoc(e, t)
+			for _, f := range e.Fields {
+				if c := column(t, f.Name); f.Role == ir.RoleNone && c != nil {
+					m.params = append(m.params, param{name: f.Name, typ: insertParamType(c)})
+				}
+			}
 		default:
-			m.pending, m.read = true, q.Spec.Kind() == "list"
+			m.pending = true
 			out = append(out, m)
 			continue
 		}
@@ -229,6 +259,10 @@ func storeShort(st *ir.Store) string {
 
 // signature renders "(ctx context.Context, …) (Model, error)".
 func (g *goFile) signature(m method) string {
+	if m.list != nil {
+		g.imports[_dalImport] = true
+		return fmt.Sprintf("(ctx context.Context, p %s) (dal.Page[%s], error)", m.alias, m.model)
+	}
 	arg := "p " + m.alias
 	if m.inline {
 		arg = goIdent(m.params[0].name) + " " + g.use(m.params[0].typ)
@@ -240,6 +274,35 @@ func (g *goFile) signature(m method) string {
 	return fmt.Sprintf("(ctx context.Context, %s) %s", arg, ret)
 }
 
+// listParams writes a List's parameters: the request message's fields, owned
+// by dalforge (sqlc's own params carry the cursor and limit instead).
+func (g *goFile) listParams(m method, short string) {
+	fmt.Fprintf(&g.body, "// %s are the parameters of %s.%s: the filters, plus paging.\n", m.alias, short, m.rpc)
+	fmt.Fprintf(&g.body, "// An empty PageToken asks for the first page; PageSize 0 means the default.\n")
+	fmt.Fprintf(&g.body, "type %s struct {\n", m.alias)
+	for _, f := range listFilterFields(m) {
+		fmt.Fprintf(&g.body, "\t%s %s\n", camel(f.name), g.use(f.typ))
+	}
+	g.body.WriteString("\tPageSize  int32\n\tPageToken string\n}\n\n")
+	fmt.Fprintf(&g.body, "// WithPageToken returns p asking for the page at token, for dal.All.\n")
+	fmt.Fprintf(&g.body, "func (p %s) WithPageToken(token string) %s {\n\tp.PageToken = token\n\treturn p\n}\n\n", m.alias, m.alias)
+}
+
+// listFilterFields are a List's filter parameters: its eq fields, then the
+// range bounds <range>_from and <range>_to.
+func listFilterFields(m method) []param {
+	var out []param
+	for _, f := range m.list.Eq {
+		out = append(out, param{name: f, typ: m.fieldType(f)})
+	}
+	if r := m.list.Range; r != "" {
+		typ := m.fieldType(r)
+		typ.Pointer = false // bounds are required
+		out = append(out, param{name: r + "_from", typ: typ}, param{name: r + "_to", typ: typ})
+	}
+	return out
+}
+
 // store writes the params aliases and the three interfaces of one store.
 func (g *goFile) store(st *ir.Store, ms []method, sqlcPkg string) {
 	short := storeShort(st)
@@ -248,6 +311,9 @@ func (g *goFile) store(st *ir.Store, ms []method, sqlcPkg string) {
 		var line string
 		if m.pending {
 			line = fmt.Sprintf("\t// %s (%s) arrives in phase 2.\n", m.rpc, m.q.Spec.Kind())
+		} else if m.list != nil {
+			g.listParams(m, short)
+			line = fmt.Sprintf("\t// %s implements %s.%s (%s).\n\t%s%s\n", m.rpc, st.FullName, m.rpc, m.q.Spec.Kind(), m.rpc, g.signature(m))
 		} else {
 			if m.alias != "" {
 				fmt.Fprintf(&g.body, "// %s are the parameters of %s.%s.\n", m.alias, short, m.rpc)

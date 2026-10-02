@@ -9,7 +9,22 @@ WHERE id = @id
   AND deleted_at IS NULL;
 
 -- orders.v1.OrderStore.ListByAccount (list)
--- OrderListByAccount: not generated yet (list queries arrive in phase 2).
+-- name: OrderListByAccount :many
+SELECT id, account_id, status, note, version, created_at, updated_at, deleted_at
+FROM orders
+WHERE account_id = @account_id
+  AND deleted_at IS NULL
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(page_limit)::int;
+
+-- name: OrderListByAccountAfter :many
+SELECT id, account_id, status, note, version, created_at, updated_at, deleted_at
+FROM orders
+WHERE account_id = @account_id
+  AND deleted_at IS NULL
+  AND (created_at, id) < (sqlc.arg(after_created_at)::timestamptz, sqlc.arg(after_id)::uuid)
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(page_limit)::int;
 
 -- orders.v1.OrderStore.Create (create)
 -- name: OrderCreate :one

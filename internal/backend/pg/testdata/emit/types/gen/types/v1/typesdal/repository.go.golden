@@ -140,3 +140,30 @@ func (r *hTTPRequestLogRepository) CreateLog(ctx context.Context, p HTTPRequestL
 	})
 	return out, err
 }
+
+var _opWithTx = dal.Op{Entity: "typesdal", Method: "WithTx", Kind: dal.OpTx, Idempotent: false}
+
+// Tx gives this package's repositories inside one transaction.
+type Tx struct{ run *dalpg.Runner }
+
+// HTTPRequestLog returns the types.v1.HTTPRequestLogStore repository, bound to the transaction.
+func (tx Tx) HTTPRequestLog() HTTPRequestLogRepository {
+	return &hTTPRequestLogRepository{run: tx.run}
+}
+
+// Queries returns sqlc's queries bound to the transaction, so custom
+// queries (queries/custom) can run in it too.
+func (tx Tx) Queries() *sqlcdb.Queries {
+	return sqlcdb.New(tx.run.Conn())
+}
+
+// WithTx runs fn in a transaction on the writer pool and commits if it
+// returns nil. Statements inside aren't retried on their own. The whole
+// transaction is retried, re-running fn, only when Postgres rolled it back
+// (serialization failure, deadlock), never after an ambiguous failure; keep
+// side effects outside the database out of fn.
+func WithTx(ctx context.Context, run *dalpg.Runner, fn func(ctx context.Context, tx Tx) error) error {
+	return run.InTx(ctx, _opWithTx, func(ctx context.Context, txRun *dalpg.Runner) error {
+		return fn(ctx, Tx{run: txRun})
+	})
+}

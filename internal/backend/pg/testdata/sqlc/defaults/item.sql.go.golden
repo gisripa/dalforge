@@ -6,14 +6,12 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 const itemCreateItem = `-- name: ItemCreateItem :one
-
-
-
 INSERT INTO item (tenant_id, id, sku, name, color, version, created_at, updated_at)
 VALUES ($1::uuid, $2::uuid, $3::text, $4::text, $5::text, 1, now(), now())
 RETURNING tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
@@ -27,12 +25,6 @@ type ItemCreateItemParams struct {
 	Color    *string
 }
 
-// defaults.v1.ItemStore.ListItemsByTenant (list)
-// ItemListItemsByTenant: not generated yet (list queries arrive in phase 2).
-// defaults.v1.ItemStore.ListItemsByTenantAndCreatedAt (list)
-// ItemListItemsByTenantAndCreatedAt: not generated yet (list queries arrive in phase 2).
-// defaults.v1.ItemStore.ListItemsByTenantNewest (list)
-// ItemListItemsByTenantNewest: not generated yet (list queries arrive in phase 2).
 // defaults.v1.ItemStore.CreateItem (create)
 func (q *Queries) ItemCreateItem(ctx context.Context, arg ItemCreateItemParams) (Item, error) {
 	row := q.db.QueryRow(ctx, itemCreateItem,
@@ -58,8 +50,6 @@ func (q *Queries) ItemCreateItem(ctx context.Context, arg ItemCreateItemParams) 
 }
 
 const itemDeleteItem = `-- name: ItemDeleteItem :one
-
-
 UPDATE item
 SET deleted_at = now(),
     updated_at = now(),
@@ -75,10 +65,6 @@ type ItemDeleteItemParams struct {
 	ID       uuid.UUID
 }
 
-// defaults.v1.ItemStore.UpsertItem (upsert)
-// ItemUpsertItem: not generated yet (upsert queries arrive in phase 2).
-// defaults.v1.ItemStore.UpsertItemBySku (upsert)
-// ItemUpsertItemBySku: not generated yet (upsert queries arrive in phase 2).
 // defaults.v1.ItemStore.DeleteItem (delete)
 func (q *Queries) ItemDeleteItem(ctx context.Context, arg ItemDeleteItemParams) (Item, error) {
 	row := q.db.QueryRow(ctx, itemDeleteItem, arg.TenantID, arg.ID)
@@ -178,6 +164,307 @@ func (q *Queries) ItemGetItemBySku(ctx context.Context, sku string) (Item, error
 	return i, err
 }
 
+const itemListItemsByTenant = `-- name: ItemListItemsByTenant :many
+SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+FROM item
+WHERE tenant_id = $1
+  AND deleted_at IS NULL
+ORDER BY id
+LIMIT $2::int
+`
+
+type ItemListItemsByTenantParams struct {
+	TenantID  uuid.UUID
+	PageLimit int32
+}
+
+// defaults.v1.ItemStore.ListItemsByTenant (list)
+func (q *Queries) ItemListItemsByTenant(ctx context.Context, arg ItemListItemsByTenantParams) ([]Item, error) {
+	rows, err := q.db.Query(ctx, itemListItemsByTenant, arg.TenantID, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Item
+	for rows.Next() {
+		var i Item
+		if err := rows.Scan(
+			&i.TenantID,
+			&i.ID,
+			&i.Sku,
+			&i.Name,
+			&i.Color,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const itemListItemsByTenantAfter = `-- name: ItemListItemsByTenantAfter :many
+SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+FROM item
+WHERE tenant_id = $1
+  AND deleted_at IS NULL
+  AND (id) > ($2::uuid)
+ORDER BY id
+LIMIT $3::int
+`
+
+type ItemListItemsByTenantAfterParams struct {
+	TenantID  uuid.UUID
+	AfterID   uuid.UUID
+	PageLimit int32
+}
+
+func (q *Queries) ItemListItemsByTenantAfter(ctx context.Context, arg ItemListItemsByTenantAfterParams) ([]Item, error) {
+	rows, err := q.db.Query(ctx, itemListItemsByTenantAfter, arg.TenantID, arg.AfterID, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Item
+	for rows.Next() {
+		var i Item
+		if err := rows.Scan(
+			&i.TenantID,
+			&i.ID,
+			&i.Sku,
+			&i.Name,
+			&i.Color,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const itemListItemsByTenantAndCreatedAt = `-- name: ItemListItemsByTenantAndCreatedAt :many
+SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+FROM item
+WHERE tenant_id = $1
+  AND deleted_at IS NULL
+  AND created_at >= $2::timestamptz
+  AND created_at < $3::timestamptz
+ORDER BY created_at, id
+LIMIT $4::int
+`
+
+type ItemListItemsByTenantAndCreatedAtParams struct {
+	TenantID      uuid.UUID
+	CreatedAtFrom time.Time
+	CreatedAtTo   time.Time
+	PageLimit     int32
+}
+
+// defaults.v1.ItemStore.ListItemsByTenantAndCreatedAt (list)
+func (q *Queries) ItemListItemsByTenantAndCreatedAt(ctx context.Context, arg ItemListItemsByTenantAndCreatedAtParams) ([]Item, error) {
+	rows, err := q.db.Query(ctx, itemListItemsByTenantAndCreatedAt,
+		arg.TenantID,
+		arg.CreatedAtFrom,
+		arg.CreatedAtTo,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Item
+	for rows.Next() {
+		var i Item
+		if err := rows.Scan(
+			&i.TenantID,
+			&i.ID,
+			&i.Sku,
+			&i.Name,
+			&i.Color,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const itemListItemsByTenantAndCreatedAtAfter = `-- name: ItemListItemsByTenantAndCreatedAtAfter :many
+SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+FROM item
+WHERE tenant_id = $1
+  AND deleted_at IS NULL
+  AND created_at >= $2::timestamptz
+  AND created_at < $3::timestamptz
+  AND (created_at, id) > ($4::timestamptz, $5::uuid)
+ORDER BY created_at, id
+LIMIT $6::int
+`
+
+type ItemListItemsByTenantAndCreatedAtAfterParams struct {
+	TenantID       uuid.UUID
+	CreatedAtFrom  time.Time
+	CreatedAtTo    time.Time
+	AfterCreatedAt time.Time
+	AfterID        uuid.UUID
+	PageLimit      int32
+}
+
+func (q *Queries) ItemListItemsByTenantAndCreatedAtAfter(ctx context.Context, arg ItemListItemsByTenantAndCreatedAtAfterParams) ([]Item, error) {
+	rows, err := q.db.Query(ctx, itemListItemsByTenantAndCreatedAtAfter,
+		arg.TenantID,
+		arg.CreatedAtFrom,
+		arg.CreatedAtTo,
+		arg.AfterCreatedAt,
+		arg.AfterID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Item
+	for rows.Next() {
+		var i Item
+		if err := rows.Scan(
+			&i.TenantID,
+			&i.ID,
+			&i.Sku,
+			&i.Name,
+			&i.Color,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const itemListItemsByTenantNewest = `-- name: ItemListItemsByTenantNewest :many
+SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+FROM item
+WHERE tenant_id = $1
+  AND deleted_at IS NULL
+ORDER BY created_at DESC, id
+LIMIT $2::int
+`
+
+type ItemListItemsByTenantNewestParams struct {
+	TenantID  uuid.UUID
+	PageLimit int32
+}
+
+// defaults.v1.ItemStore.ListItemsByTenantNewest (list)
+func (q *Queries) ItemListItemsByTenantNewest(ctx context.Context, arg ItemListItemsByTenantNewestParams) ([]Item, error) {
+	rows, err := q.db.Query(ctx, itemListItemsByTenantNewest, arg.TenantID, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Item
+	for rows.Next() {
+		var i Item
+		if err := rows.Scan(
+			&i.TenantID,
+			&i.ID,
+			&i.Sku,
+			&i.Name,
+			&i.Color,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const itemListItemsByTenantNewestAfter = `-- name: ItemListItemsByTenantNewestAfter :many
+SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+FROM item
+WHERE tenant_id = $1
+  AND deleted_at IS NULL
+  AND ((created_at < $2::timestamptz)
+    OR (created_at = $2::timestamptz AND id > $3::uuid))
+ORDER BY created_at DESC, id
+LIMIT $4::int
+`
+
+type ItemListItemsByTenantNewestAfterParams struct {
+	TenantID       uuid.UUID
+	AfterCreatedAt time.Time
+	AfterID        uuid.UUID
+	PageLimit      int32
+}
+
+func (q *Queries) ItemListItemsByTenantNewestAfter(ctx context.Context, arg ItemListItemsByTenantNewestAfterParams) ([]Item, error) {
+	rows, err := q.db.Query(ctx, itemListItemsByTenantNewestAfter,
+		arg.TenantID,
+		arg.AfterCreatedAt,
+		arg.AfterID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Item
+	for rows.Next() {
+		var i Item
+		if err := rows.Scan(
+			&i.TenantID,
+			&i.ID,
+			&i.Sku,
+			&i.Name,
+			&i.Color,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const itemUpdateItem = `-- name: ItemUpdateItem :one
 UPDATE item
 SET sku = $1::text,
@@ -210,6 +497,94 @@ func (q *Queries) ItemUpdateItem(ctx context.Context, arg ItemUpdateItemParams) 
 		arg.TenantID,
 		arg.ID,
 		arg.Version,
+	)
+	var i Item
+	err := row.Scan(
+		&i.TenantID,
+		&i.ID,
+		&i.Sku,
+		&i.Name,
+		&i.Color,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const itemUpsertItem = `-- name: ItemUpsertItem :one
+INSERT INTO item (tenant_id, id, sku, name, color, version, created_at, updated_at)
+VALUES ($1::uuid, $2::uuid, $3::text, $4::text, $5::text, 1, now(), now())
+ON CONFLICT (tenant_id, id) DO UPDATE
+SET sku = EXCLUDED.sku,
+    name = EXCLUDED.name,
+    color = EXCLUDED.color,
+    updated_at = now(),
+    version = item.version + 1
+WHERE item.deleted_at IS NULL
+RETURNING tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+`
+
+type ItemUpsertItemParams struct {
+	TenantID *uuid.UUID
+	ID       *uuid.UUID
+	Sku      *string
+	Name     *string
+	Color    *string
+}
+
+// defaults.v1.ItemStore.UpsertItem (upsert)
+func (q *Queries) ItemUpsertItem(ctx context.Context, arg ItemUpsertItemParams) (Item, error) {
+	row := q.db.QueryRow(ctx, itemUpsertItem,
+		arg.TenantID,
+		arg.ID,
+		arg.Sku,
+		arg.Name,
+		arg.Color,
+	)
+	var i Item
+	err := row.Scan(
+		&i.TenantID,
+		&i.ID,
+		&i.Sku,
+		&i.Name,
+		&i.Color,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const itemUpsertItemBySku = `-- name: ItemUpsertItemBySku :one
+INSERT INTO item (tenant_id, id, sku, name, color, version, created_at, updated_at)
+VALUES ($1::uuid, $2::uuid, $3::text, $4::text, $5::text, 1, now(), now())
+ON CONFLICT (sku) WHERE deleted_at IS NULL DO UPDATE
+SET name = EXCLUDED.name,
+    updated_at = now(),
+    version = item.version + 1
+WHERE item.deleted_at IS NULL
+RETURNING tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at
+`
+
+type ItemUpsertItemBySkuParams struct {
+	TenantID *uuid.UUID
+	ID       *uuid.UUID
+	Sku      *string
+	Name     *string
+	Color    *string
+}
+
+// defaults.v1.ItemStore.UpsertItemBySku (upsert)
+func (q *Queries) ItemUpsertItemBySku(ctx context.Context, arg ItemUpsertItemBySkuParams) (Item, error) {
+	row := q.db.QueryRow(ctx, itemUpsertItemBySku,
+		arg.TenantID,
+		arg.ID,
+		arg.Sku,
+		arg.Name,
+		arg.Color,
 	)
 	var i Item
 	err := row.Scan(

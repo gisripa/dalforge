@@ -29,6 +29,17 @@ func (t Target) major() int {
 type Schema struct {
 	Extensions []string `json:"extensions,omitempty"` // sorted, deduplicated
 	Tables     []*Table `json:"tables"`               // sorted by Name
+	// Paths describes each List query's keyset, keyed "Store.Method".
+	Paths map[string]*AccessPath `json:"paths,omitempty"`
+}
+
+// AccessPath is how one List query reads its table (design §5).
+type AccessPath struct {
+	Eq    []string     `json:"eq,omitempty"`    // equality fields
+	Range string       `json:"range,omitempty"` // range field
+	Keys  []ir.SortKey `json:"keys"`            // keyset: sort keys, then key fields as tie-breakers
+	Mixed bool         `json:"mixed,omitempty"` // directions differ: no single row comparison
+	Index string       `json:"index"`           // the index that serves it
 }
 
 // Table is one entity's table.
@@ -61,6 +72,10 @@ type Index struct {
 	Include []string      `json:"include,omitempty"` // column names
 	Where   string        `json:"where,omitempty"`
 	Unique  bool          `json:"unique,omitempty"`
+	Derived bool          `json:"derived,omitempty"` // derived from access patterns, not declared
+	For     []string      `json:"for,omitempty"`     // rpcs it serves (derived indexes)
+	eq      int           // derived: leading equality columns, whose direction doesn't matter
+	sorted  int           // derived: eq and sort columns, before the key tie-breakers
 }
 
 // IndexColumn is one key column of an index.

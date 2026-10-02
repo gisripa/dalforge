@@ -42,6 +42,7 @@ func Build(s *ir.Schema, h *pgir.Hints, t Target) (*Schema, diag.List) {
 		b.out.Tables = append(b.out.Tables, tbl)
 	}
 	slices.SortFunc(b.out.Tables, func(a, c *Table) int { return cmp.Compare(a.Name, c.Name) })
+	b.accessPaths(s)
 	b.diags.Sort()
 	return b.out, b.diags
 }
@@ -51,6 +52,8 @@ type builder struct {
 	target int
 	out    *Schema
 	diags  diag.List
+	// clashed lists already reported DAL202; later hints skip them.
+	clashed map[*ir.Query]bool
 }
 
 func (b *builder) version() {

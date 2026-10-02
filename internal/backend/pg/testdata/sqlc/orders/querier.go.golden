@@ -10,8 +10,6 @@ import (
 )
 
 type Querier interface {
-	// orders.v1.OrderStore.ListByAccount (list)
-	// OrderListByAccount: not generated yet (list queries arrive in phase 2).
 	// orders.v1.OrderStore.Create (create)
 	OrderCreate(ctx context.Context, arg OrderCreateParams) (Order, error)
 	// orders.v1.OrderStore.Delete (delete)
@@ -22,6 +20,9 @@ type Querier interface {
 	// Queries on orders. Write your own in the custom queries directory, never here.
 	// orders.v1.OrderStore.GetById (get)
 	OrderGetById(ctx context.Context, id uuid.UUID) (Order, error)
+	// orders.v1.OrderStore.ListByAccount (list)
+	OrderListByAccount(ctx context.Context, arg OrderListByAccountParams) ([]Order, error)
+	OrderListByAccountAfter(ctx context.Context, arg OrderListByAccountAfterParams) ([]Order, error)
 	// orders.v1.OrderStore.UpdateStatus (update)
 	OrderUpdateStatus(ctx context.Context, arg OrderUpdateStatusParams) (Order, error)
 }

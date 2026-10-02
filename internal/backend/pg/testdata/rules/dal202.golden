@@ -1,0 +1,1 @@
+dal202.proto:34:3: error DAL202: rpc ListPostsByAuthorTitle: order_by [title] contradicts posts_by_author (author_id, created_at DESC) on the same eq fields; align them, or the list needs a second index
