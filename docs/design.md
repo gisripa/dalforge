@@ -1576,7 +1576,11 @@ every increment updates the sections it affects.
    tokens and `dal.All`, index derivation and merging, the DAL1xx/DAL2xx lint
    rules. Upsert, soft delete, optimistic locking, and `WithTx`. **Done
    (2026-10-01).**
-3. **Migrations:** snapshot, diff, the additive contract with retired columns, DAL3xx rules,
+   **v0 distribution (2026-10-02):** user manual with generated parts, the
+   runtime as its own module, CI, GoReleaser releases, and stable derived
+   index names, so v0 is usable for new databases before migrations exist.
+3. **Migrations:** an adoption baseline for schemas deployed with v0,
+   snapshot, diff, the additive contract with retired columns, DAL3xx rules,
    golang-migrate file emission.
 4. **Extensions:** `custom_type` ergonomics (pgvector, PostGIS), buf plugin
    mode, the Atlas backend, sqlc vet rule packs, shard-key enforcement, and a
