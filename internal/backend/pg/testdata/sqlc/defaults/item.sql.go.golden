@@ -97,6 +97,28 @@ func (q *Queries) ItemDeleteItem(ctx context.Context, arg ItemDeleteItemParams) 
 	return i, err
 }
 
+const itemExists = `-- name: ItemExists :one
+SELECT EXISTS (
+  SELECT 1 FROM item
+  WHERE tenant_id = $1
+    AND id = $2
+    AND deleted_at IS NULL
+)
+`
+
+type ItemExistsParams struct {
+	TenantID uuid.UUID
+	ID       uuid.UUID
+}
+
+// defaults.v1.ItemStore: existence check, used to tell a stale version from a missing row
+func (q *Queries) ItemExists(ctx context.Context, arg ItemExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, itemExists, arg.TenantID, arg.ID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const itemGetItem = `-- name: ItemGetItem :one
 
 SELECT tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at

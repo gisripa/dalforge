@@ -38,3 +38,11 @@ SET deleted_at = now(),
 WHERE id = @id
   AND deleted_at IS NULL
 RETURNING id, account_id, status, note, version, created_at, updated_at, deleted_at;
+
+-- orders.v1.OrderStore: existence check, used to tell a stale version from a missing row
+-- name: OrderExists :one
+SELECT EXISTS (
+  SELECT 1 FROM orders
+  WHERE id = @id
+    AND deleted_at IS NULL
+);

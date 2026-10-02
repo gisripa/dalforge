@@ -270,3 +270,17 @@ func TestAttemptInContext(t *testing.T) {
 		t.Errorf("err = %v, attempts seen = %v; want success with [1 2 3]", err, seen)
 	}
 }
+
+func TestHelpers(t *testing.T) {
+	err := NewError(_op, &dal.MissingFieldError{Field: "account_id"})
+	var de *dal.Error
+	if !errors.As(err, &de) || de.Retryability != dal.NotRetryable || !errors.Is(err, dal.ErrMissingField) {
+		t.Errorf("NewError = %v, want a not-retryable *dal.Error matching ErrMissingField", err)
+	}
+	if NewError(_op, nil) != nil {
+		t.Error("NewError(nil) must be nil")
+	}
+	if !IsNoRows(fmt.Errorf("q: %w", pgx.ErrNoRows)) || IsNoRows(errors.New("x")) {
+		t.Error("IsNoRows misclassifies")
+	}
+}

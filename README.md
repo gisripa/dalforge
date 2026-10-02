@@ -35,7 +35,8 @@ mise run check                    # lint + unit tests + build (no Docker)
 mise run db:up                    # start the Colima VM + local postgres:16.9 (docker compose)
 mise run vm:down                  # stop the VM when done (frees ~2 GB RAM)
 mise run test:integration         # integration tests against it
-mise run check:all                # check + integration (what CI runs)
+mise run check:all                # check + Postgres tests
+mise run demo                     # run examples/orders end to end, like a user would
 ```
 
 ## Layout

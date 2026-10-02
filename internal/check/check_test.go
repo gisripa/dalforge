@@ -2,6 +2,7 @@ package check
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/gisripa/dalforge/internal/golden"
@@ -41,5 +42,14 @@ func TestValidFixturesAreClean(t *testing.T) {
 				t.Errorf("unexpected findings:\n%s", got)
 			}
 		})
+	}
+}
+
+// TestNoCascadeFromBrokenReference: a typo in a reference reports only the
+// reference, not a follow-on request-shape error.
+func TestNoCascadeFromBrokenReference(t *testing.T) {
+	got := findings(t, "testdata", "cascade.proto")
+	if strings.Count(got, "\n") != 1 || !strings.Contains(got, "DAL117") {
+		t.Errorf("findings =\n%s\nwant exactly one DAL117", got)
 	}
 }

@@ -53,9 +53,9 @@ env = { DALFORGE_UPDATE_GOLDEN = "1" }
 run = "go test -count=1 ./..."
 
 [tasks."test:integration"]
-description = "Run integration tests against the compose Postgres (needs Docker)"
+description = "Run the tests that need Postgres (runtime error mapping, routing, transactions)"
 depends = ["db:up"]
-run = "go test -tags integration -race -count=1 ./..."
+run = "go test -tags integration -race -count=1 ./dal/dalpg/ ./internal/integration/"
 
 [tasks."vm:up"]
 description = "Start the dalforge Colima VM (no-op if running, or in CI)"
@@ -80,6 +80,13 @@ run = "docker-compose down -v"
 [tasks."db:psql"]
 description = "Open psql on the local Postgres"
 run = "docker-compose exec postgres psql -U dalforge"
+
+[tasks.demo]
+description = "Run examples/orders like a user would: dalforge generate, then the app on Postgres"
+depends = ["db:up", "build"]
+dir = "examples/orders"
+env = { DATABASE_URL = "postgres://dalforge:dalforge@localhost:55432/dalforge?sslmode=disable" }
+run = ["dalforge generate", "go mod tidy", "go run ."]
 
 [tasks.cover]
 description = "Run tests with a coverage report"

@@ -204,7 +204,8 @@ sqlc = "1.30.0"
 **Behaviour:**
 - **Creation:** `dalforge generate` writes the lock if it's missing.
 - **Mismatch:** if the running binary's version or bundled options hashes
-  differ from the lock, `generate`, `lint` and `migrate` fail. `dalforge lock
+  (or, for `generate`, the sqlc version) differ from the lock, `generate`
+  and `lint` fail, naming each difference. `dalforge lock
   -upgrade` is the explicit way forward, and the lock change shows up in
   review. A teammate or CI job with a different dalforge can't silently
   regenerate different code.
@@ -222,10 +223,19 @@ sqlc = "1.30.0"
   never pins it. That's why dalforge needs its own lock. The lock is still
   install-agnostic, so a release binary or Homebrew install is checked the
   same way.
-- **Version detection:** `go install` stamps the module version into the
-  binary, and dalforge reads it with `debug.ReadBuildInfo()` (no ldflags). A
-  local build reports `(devel)`. The lock check then warns instead of failing,
-  so work on dalforge itself isn't blocked.
+- **Version detection:** `go install …@v0.3.1` stamps the release into the
+  binary, and dalforge reads it with `debug.ReadBuildInfo()` (no ldflags).
+  - **Local builds** are recorded as `(devel)` and only warn on a mismatch, so
+    work on dalforge itself isn't blocked. That includes the pseudo-versions
+    Go stamps on builds from a git checkout
+    (`v0.0.0-20261002040003-851063fe8fa3+dirty`), which change with every
+    commit and would otherwise make the lock churn.
+  - **`dalforge lock`** shows whether the lock matches; `dalforge lock
+    -upgrade` rewrites it.
+  - **Option hashes** cover each options file's descriptor without source
+    info, so a vendored source copy and the embedded descriptor hash
+    identically. A stale vendored copy is a DAL116 *warning*: generation
+    continues with the bundled options.
 - **No cgo:** dalforge must stay pure Go, because `go install` compiles on the
   user's machine and cgo would require a C toolchain and slow installs. Its
   current dependencies (protocompile, pgx) are pure Go, and any new dependency
@@ -610,7 +620,7 @@ Core (every backend):
 | DAL115 | error | a nullable column is in `order_by` without also being the `range` column |
 | DAL117 | error | a query reference (`by`, `eq`, `range`, `order_by`, `columns`, `conflict_on`) names a missing or repeated field; a column name used by mistake gets a hint |
 | DAL118 | error | `update`/`upsert` `columns` sets a key field or a role-managed field |
-| DAL116 | error | a vendored copy of the options protos differs from the hashes in `dalforge.lock` |
+| DAL116 | warning | a vendored copy of the options protos (under a proto root) differs from the options bundled in the binary, which are the ones dalforge uses |
 
 Postgres:
 
@@ -877,6 +887,31 @@ o, err := repo.Create(ctx, ordersdal.CreateOrderParams{
 The read model (`Order`) keeps plain values for required columns. Pointer
 semantics for *updates* (whether nil means "unchanged" or "error") is still
 open and is decided with the DAL implementation.
+
+### The generated implementation
+
+`repository.go` in each DAL package implements the interfaces (step 1.9c).
+- **One Runner call per method, around one sqlc call.** The Runner owns
+  routing, retries, error mapping and the per-attempt context.
+- **A `dal.Op` per rpc is fixed at generation time**, with idempotency per
+  §7: Get and Delete are idempotent, Create isn't, and Update is unless it's
+  a version compare-and-swap.
+- **Create** returns `MissingFieldError` for a nil required field before any
+  database call, and gives a nil UUID primary key a UUIDv7 *before* the retry
+  loop, so retries reuse the same ID.
+- **A versioned Update** that changes zero rows runs the generated
+  `<Store>Exists` query on the same connection, only on that failure path,
+  and returns `ErrVersionConflict` (row exists) or `ErrNotFound`.
+- **Delete without an entity response** uses `:execrows`, and zero rows
+  returns `ErrNotFound`.
+- **No pgx imports in generated code:** `dalpg.NewError` and `dalpg.IsNoRows`
+  cover what it needs.
+- **`WithTx`** for generated repositories comes in step 2.8.
+
+Proven end to end by the example project (`mise run demo`, §11): generate →
+sqlc → compile → the app exercises the repositories against Postgres. It
+covers UUIDv7, column defaults, a unique lookup, duplicates, a missing
+field, compare-and-swap with a stale version, soft delete and a custom query.
 
 ### Writes: basic and safe, the rest is custom
 
@@ -1203,13 +1238,55 @@ The generated `sqlc.yaml` turns on sqlc's safety features:
   opt-in CEL rules: reject `OFFSET` in custom queries, and flag sequential
   scans with `postgresql.explain`.
 
+### `dalforge.yaml` and the CLI (step 1.10)
+
+```yaml
+version: 1
+module: github.com/acme/shop   # Go module of this project (imports of generated code)
+backend: pg
+proto:
+  roots: [proto]               # import paths; default [proto]
+  files: ["orders/v1/*.proto"] # globs under the roots; default: every .proto
+pg:
+  version: "16.9"              # deploy target (DAL207); default 16
+out:                           # defaults shown
+  schema: schema/schema.sql
+  queries: queries/generated
+  custom: queries/custom       # user-owned; never written
+  sqlc: gen/sqlcdb             # its last element is sqlc's Go package name
+  dal: gen
+```
+
+**Validation:**
+- Unknown keys are errors, so a typo can't silently do nothing.
+- `module` is required.
+- Every path must stay inside the project.
+- `out.custom` may not overlap any generated directory.
+- Vendored copies of the dal options are never treated as inputs.
+
+**Commands:**
+- **`dalforge lint [-config dalforge.yaml]`** runs load → check → build →
+  emit without writing anything. It prints findings to stderr and exits 1 on
+  errors; it's silent on a clean IDL.
+- **`dalforge generate`** runs the same pipeline, then:
+  - writes only changed files, so mtimes stay stable;
+  - removes stale generated files, but only files headed `Code generated by
+    dalforge` or `by sqlc`, and never anything under `out.custom`;
+  - runs sqlc, clearing sqlc's old output first, since sqlc never deletes
+    files for removed queries;
+  - skips sqlc with a note when there are no queries at all.
+- **Cascades are suppressed:** a query with a broken reference (DAL117)
+  doesn't also report a request-shape error (DAL107), so a single typo yields
+  a single error.
+
 ## 10. Testing
 
 | Suite | Where | Runs with | Needs |
 |---|---|---|---|
 | Unit | `*_test.go` next to the code | `mise run test` (part of `mise run check`) | nothing |
 | Golden | unit tests comparing generator output with `testdata/**/*.golden` via `internal/golden` (`Assert` for one file, `AssertDir` for a generated file set, including stale-file detection) | `mise run test`; `mise run test:update` rewrites them (`DALFORGE_UPDATE_GOLDEN=1`, refused when `CI` is set) | nothing |
-| Integration | `//go:build integration` files next to the code they cover, plus end-to-end suites in `internal/integration/` | `mise run test:integration` (runs `vm:up` and `db:up` first) | nothing beyond mise (Colima locally, native Docker in CI) |
+| Integration | `//go:build integration` tests that need Postgres: `dal/dalpg` (real SQLSTATE errors, routing, transactions, tracer) and `internal/integration` | `mise run test:integration` (runs `vm:up` and `db:up` first; about 5 s warm) | nothing beyond mise (Colima locally, native Docker in CI) |
+| End to end | `examples/orders`, run like a user's project | `mise run demo` (about 7 s warm) | the same |
 | Examples | `examples/orders` regenerated and diffed | `mise run examples` (part of `mise run check`) | nothing |
 
 **Local Postgres.** `compose.yaml` runs `postgres:16.9`, the community
@@ -1307,6 +1384,22 @@ A runnable demo exercises CRUD and pagination against Postgres 16.
 checked-in output can't go stale. The example grows with each phase: CRUD in
 phase 1, List and lint in phase 2, and a migration walkthrough in phase 3.
 
+
+**Built in step 1.11** (phase-1 scope: CRUD by key). `examples/orders` is a
+standalone module with a `shop.v1` IDL (Account and Order), `dalforge.yaml`,
+a custom report query and a `main.go` that plays out a shop's day with
+gofakeit data, checking every step. Generated files (`schema/`,
+`queries/generated/`, `sqlc.yaml`, `gen/`) are gitignored and recreated by
+`dalforge generate`. `mise run demo` runs it end to end and exits non-zero on
+any unexpected outcome, so it's also the smoke test. The ESR ladder,
+pagination and transactional referential integrity join it in phase 2.
+
+**Test-suite weight:** an earlier version of the suite built six throwaway
+Go modules per run to compile generated code. That was slow on a laptop, and
+it once hung waiting on macOS's first-launch check of a freshly built test
+binary. Those tests were replaced by the example. The fast suites are `check`
+(about 12 s) and `test:integration` (about 5 s), and `demo` is the end-to-end
+proof.
 ## 12. Documentation
 
 Because DALForge introduces its own IDL, the **user manual** (`docs/manual/`)

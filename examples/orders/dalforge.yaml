@@ -1,0 +1,7 @@
+version: 1
+module: github.com/gisripa/dalforge/examples/orders
+backend: pg
+proto:
+  roots: [proto]
+pg:
+  version: "16.9"

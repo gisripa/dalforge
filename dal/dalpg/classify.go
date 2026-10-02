@@ -115,3 +115,16 @@ func wrap(op dal.Op, err error, classify Classifier) error {
 	}
 	return out
 }
+
+// NewError turns err into a classified *dal.Error for op, as Runner does. It
+// is for errors raised before a query runs, such as a nil required field, so
+// they reach callers in the same form as database errors. nil stays nil.
+func NewError(op dal.Op, err error) error {
+	return wrap(op, err, nil)
+}
+
+// IsNoRows reports whether err means a query returned no row. Generated code
+// uses it instead of importing pgx.
+func IsNoRows(err error) bool {
+	return errors.Is(err, pgx.ErrNoRows)
+}

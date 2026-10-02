@@ -53,6 +53,26 @@ func emitQueries(s *ir.Schema, m *Schema) (map[string][]byte, diag.List) {
 			}
 			b.WriteString(sql)
 		}
+
+		// A versioned update that changes zero rows is either a missing row
+		// or a stale version; the repository tells them apart with this
+		// existence check, run only on that failure path.
+		if needsExists(st, e) {
+			name := short + "Exists"
+			if prev, dup := names[name]; dup {
+				diags.Add(RuleQueryName, diag.Error, st.Pos, "the internal sqlc query %s (version-conflict check of %s) collides with %s; rename the rpc", name, st.FullName, prev)
+				continue
+			}
+			names[name] = st.FullName + " (internal exists check)"
+			qb := queryBuilder{e: e, t: t}
+			conds, err := qb.match(e.PrimaryKey())
+			if err != nil {
+				diags.Add(_ruleInternal, diag.Error, st.Pos, "%v", err)
+				continue
+			}
+			fmt.Fprintf(b, "\n-- %s: existence check, used to tell a stale version from a missing row\n", st.FullName)
+			fmt.Fprintf(b, "-- name: %s :one\nSELECT EXISTS (\n  SELECT 1 FROM %s\n  %s\n);\n", name, t.Name, strings.ReplaceAll(where(conds), "\n", "\n  "))
+		}
 	}
 
 	out := make(map[string][]byte, len(files))
@@ -223,4 +243,11 @@ func (qb queryBuilder) delete(name string) (string, error) {
 			name, cmd, qb.t.Name, strings.Join(sets, ",\n    "), where(conds), returning), nil
 	}
 	return fmt.Sprintf("-- name: %s %s\nDELETE FROM %s\n%s%s;\n", name, cmd, qb.t.Name, where(conds), returning), nil
+}
+
+// needsExists reports whether a store has an update on a versioned entity.
+func needsExists(st *ir.Store, e *ir.Entity) bool {
+	hasVersion := slices.ContainsFunc(e.Fields, func(f *ir.Field) bool { return f.Role == ir.RoleVersion })
+	hasUpdate := slices.ContainsFunc(st.Queries, func(q *ir.Query) bool { return q.Spec.Kind() == "update" })
+	return hasVersion && hasUpdate
 }

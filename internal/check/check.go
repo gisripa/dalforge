@@ -36,9 +36,15 @@ func Schema(s *ir.Schema) diag.List {
 			continue // the loader guarantees this; be defensive
 		}
 		for _, q := range st.Queries {
+			before := len(l)
 			references(&l, e, q)
+			// A broken reference makes the expected request shape wrong too;
+			// skip DAL107 so only the root cause is reported.
+			brokenRefs := len(l) > before
 			writeFields(&l, e, q)
-			shapes(&l, e, q)
+			if !brokenRefs {
+				shapes(&l, e, q)
+			}
 		}
 	}
 	l.Sort()

@@ -61,3 +61,12 @@ WHERE tenant_id = @tenant_id
   AND id = @id
   AND deleted_at IS NULL
 RETURNING tenant_id, id, sku, name, color, version, created_at, updated_at, deleted_at;
+
+-- defaults.v1.ItemStore: existence check, used to tell a stale version from a missing row
+-- name: ItemExists :one
+SELECT EXISTS (
+  SELECT 1 FROM item
+  WHERE tenant_id = @tenant_id
+    AND id = @id
+    AND deleted_at IS NULL
+);
