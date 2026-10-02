@@ -34,14 +34,16 @@ between minor versions.
 ```toml
 # mise.toml in your project
 [tools]
-"github:gisripa/dalforge" = "0.1.0"
+"github:gisripa/dalforge" = "X.Y.Z"   # latest: see Releases
 sqlc = "1.31"
 ```
 
-Or `go install github.com/gisripa/dalforge/cmd/dalforge@v0.1.0`. Generated code
-needs the runtime at the same version:
-`go get github.com/gisripa/dalforge/dal@v0.1.0`. See
-[Setting up a project](docs/manual/project-setup.md).
+Or `go install github.com/gisripa/dalforge/cmd/dalforge@vX.Y.Z`. The `dalforge`
+CLI is a development tool (pinned in `mise.toml`); the code it generates
+imports a small runtime library, which goes in your `go.mod` at the same
+version: `go get github.com/gisripa/dalforge/dal@vX.Y.Z`. See
+[Setting up a project](docs/manual/project-setup.md) for how the two fit
+together and how to upgrade.
 
 ## Developing dalforge
 
