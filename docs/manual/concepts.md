@@ -56,6 +56,11 @@ header, and stale ones (for a removed rpc, say) are deleted automatically.
 Whether you commit generated output is your choice. The example ignores it,
 so you always see what the current IDL produces.
 
+The `dalforge` CLI that does the generating is a development tool, pinned in
+`mise.toml`. The code it generates imports a small runtime library, pinned in
+your `go.mod` at the same version. See
+[the generator and the runtime](project-setup.md#two-pieces-the-generator-and-the-runtime).
+
 ## Where sqlc fits
 
 dalforge doesn't replace sqlc; it drives it. The generated queries are
