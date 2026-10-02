@@ -4,6 +4,8 @@
 [tools]
 go = "1.26"            # latest 1.26.x patch
 golangci-lint = "2"    # latest 2.x
+protoc = "36"          # compiles proto/; protoc-gen-go is a go.mod tool, so it matches the runtime
+sqlc = "1.31"          # prebuilt binary; generated code is tested against it (also what consumers pin)
 # Container runtime without Docker Desktop: a Colima VM running dockerd.
 colima = "latest"
 lima = "latest"        # colima's VM manager
@@ -26,9 +28,29 @@ run = "go build -o bin/ ./cmd/..."
 description = "Run the dalforge command (pass args after --)"
 run = "go run ./cmd/dalforge"
 
+[tasks.proto]
+description = "Regenerate Go bindings for the dalforge options protos"
+run = "scripts/protogen.sh ."
+
+[tasks."proto:check"]
+description = "Fail if the checked-in Go bindings are stale"
+run = """
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+scripts/protogen.sh "$tmp"
+for f in $(cd "$tmp" && find proto -name '*.pb.go'); do
+  diff -u "$f" "$tmp/$f" || { echo "stale: $f (run: mise run proto)" >&2; exit 1; }
+done
+"""
+
 [tasks.test]
 description = "Run unit tests with the race detector"
 run = "go test -race -count=1 ./..."
+
+[tasks."test:update"]
+description = "Rewrite golden files from current output (review the diff afterwards)"
+env = { DALFORGE_UPDATE_GOLDEN = "1" }
+run = "go test -count=1 ./..."
 
 [tasks."test:integration"]
 description = "Run integration tests against the compose Postgres (needs Docker)"
@@ -80,7 +102,7 @@ run = "go mod tidy"
 
 [tasks.check]
 description = "Fast checks, no Docker: lint + unit tests + build"
-depends = ["lint", "test", "build"]
+depends = ["lint", "test", "build", "proto:check"]
 
 [tasks."check:all"]
 description = "Everything CI should run: check + integration tests"

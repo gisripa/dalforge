@@ -1,0 +1,542 @@
+{
+  "schema": {
+    "entities": [
+      {
+        "full_name": "types.v1.HTTPRequestLog",
+        "table": "http_request_log",
+        "table_source": "defaulted",
+        "fields": [
+          {
+            "name": "id",
+            "column": "id",
+            "number": 1,
+            "kind": "int64",
+            "primary_key": true,
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 45,
+              "col": 3
+            }
+          },
+          {
+            "name": "ok",
+            "column": "ok",
+            "number": 2,
+            "kind": "bool",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 46,
+              "col": 3
+            }
+          },
+          {
+            "name": "i32",
+            "column": "i32",
+            "number": 3,
+            "kind": "int32",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 47,
+              "col": 3
+            }
+          },
+          {
+            "name": "s32",
+            "column": "s32",
+            "number": 4,
+            "kind": "int32",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 48,
+              "col": 3
+            }
+          },
+          {
+            "name": "sf32",
+            "column": "sf32",
+            "number": 5,
+            "kind": "int32",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 49,
+              "col": 3
+            }
+          },
+          {
+            "name": "i64",
+            "column": "i64",
+            "number": 6,
+            "kind": "int64",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 50,
+              "col": 3
+            }
+          },
+          {
+            "name": "s64",
+            "column": "s64",
+            "number": 7,
+            "kind": "int64",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 51,
+              "col": 3
+            }
+          },
+          {
+            "name": "sf64",
+            "column": "sf64",
+            "number": 8,
+            "kind": "int64",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 52,
+              "col": 3
+            }
+          },
+          {
+            "name": "u32",
+            "column": "u32",
+            "number": 9,
+            "kind": "uint32",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 53,
+              "col": 3
+            }
+          },
+          {
+            "name": "f32",
+            "column": "f32",
+            "number": 10,
+            "kind": "uint32",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 54,
+              "col": 3
+            }
+          },
+          {
+            "name": "u64",
+            "column": "u64",
+            "number": 11,
+            "kind": "uint64",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 56,
+              "col": 3
+            }
+          },
+          {
+            "name": "f64",
+            "column": "f64",
+            "number": 12,
+            "kind": "uint64",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 60,
+              "col": 3
+            }
+          },
+          {
+            "name": "fl",
+            "column": "fl",
+            "number": 13,
+            "kind": "float",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 64,
+              "col": 3
+            }
+          },
+          {
+            "name": "db",
+            "column": "db",
+            "number": 14,
+            "kind": "double",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 65,
+              "col": 3
+            }
+          },
+          {
+            "name": "path",
+            "column": "path",
+            "number": 15,
+            "kind": "string",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 66,
+              "col": 3
+            }
+          },
+          {
+            "name": "body",
+            "column": "body",
+            "number": 16,
+            "kind": "bytes",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 67,
+              "col": 3
+            }
+          },
+          {
+            "name": "color",
+            "column": "color",
+            "number": 17,
+            "kind": "enum",
+            "enum": {
+              "full_name": "types.v1.Color",
+              "values": [
+                "COLOR_UNSPECIFIED",
+                "COLOR_RED",
+                "COLOR_BLUE"
+              ]
+            },
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 68,
+              "col": 3
+            }
+          },
+          {
+            "name": "created_at",
+            "column": "created_at",
+            "number": 18,
+            "kind": "timestamp",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 69,
+              "col": 3
+            }
+          },
+          {
+            "name": "finished_at",
+            "column": "finished_at",
+            "number": 19,
+            "kind": "timestamp",
+            "nullable": true,
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 70,
+              "col": 3
+            }
+          },
+          {
+            "name": "note",
+            "column": "note",
+            "number": 20,
+            "kind": "string",
+            "nullable": true,
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 71,
+              "col": 3
+            }
+          },
+          {
+            "name": "tags",
+            "column": "tags",
+            "number": 21,
+            "kind": "string",
+            "repeated": true,
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 72,
+              "col": 3
+            }
+          },
+          {
+            "name": "headers",
+            "column": "headers",
+            "number": 22,
+            "kind": "json",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 73,
+              "col": 3
+            }
+          },
+          {
+            "name": "meta",
+            "column": "meta",
+            "number": 23,
+            "kind": "json",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 74,
+              "col": 3
+            }
+          },
+          {
+            "name": "nested",
+            "column": "nested",
+            "number": 24,
+            "kind": "json",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 75,
+              "col": 3
+            }
+          },
+          {
+            "name": "nested_list",
+            "column": "nested_list",
+            "number": 25,
+            "kind": "json",
+            "repeated": true,
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 76,
+              "col": 3
+            }
+          },
+          {
+            "name": "status",
+            "column": "status",
+            "number": 26,
+            "kind": "int32",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 77,
+              "col": 3
+            }
+          },
+          {
+            "name": "request_id",
+            "column": "req_id",
+            "number": 27,
+            "kind": "string",
+            "format": "uuid",
+            "unique": true,
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 78,
+              "col": 3
+            }
+          },
+          {
+            "name": "amount",
+            "column": "amount",
+            "number": 28,
+            "kind": "string",
+            "format": "decimal",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 83,
+              "col": 3
+            }
+          },
+          {
+            "name": "payload",
+            "column": "payload",
+            "number": 29,
+            "kind": "string",
+            "format": "json",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 87,
+              "col": 3
+            }
+          },
+          {
+            "name": "embedding",
+            "column": "embedding",
+            "number": 30,
+            "kind": "string",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 88,
+              "col": 3
+            }
+          },
+          {
+            "name": "ratio",
+            "column": "ratio",
+            "number": 32,
+            "kind": "double",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 92,
+              "col": 3
+            }
+          },
+          {
+            "name": "day",
+            "column": "day",
+            "number": 33,
+            "kind": "timestamp",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 93,
+              "col": 3
+            }
+          },
+          {
+            "name": "client_ip",
+            "column": "client_ip",
+            "number": 34,
+            "kind": "string",
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 94,
+              "col": 3
+            }
+          }
+        ],
+        "reserved": {
+          "numbers": [
+            [
+              31,
+              31
+            ],
+            [
+              40,
+              42
+            ],
+            [
+              50,
+              50
+            ]
+          ],
+          "names": [
+            "old_status",
+            "legacy_path"
+          ]
+        },
+        "pos": {
+          "file": "types/v1/types.proto",
+          "line": 23,
+          "col": 1
+        }
+      }
+    ],
+    "stores": [
+      {
+        "full_name": "types.v1.HTTPRequestLogStore",
+        "entity": "types.v1.HTTPRequestLog",
+        "queries": [
+          {
+            "method": "GetLog",
+            "request": {
+              "full_name": "types.v1.LogKey",
+              "fields": [
+                {
+                  "name": "id",
+                  "number": 1,
+                  "kind": "int64"
+                }
+              ]
+            },
+            "response": {
+              "full_name": "types.v1.HTTPRequestLog",
+              "entity": true
+            },
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 101,
+              "col": 3
+            },
+            "spec": {
+              "get": {
+                "by": {
+                  "names": [
+                    "id"
+                  ],
+                  "source": "defaulted"
+                },
+                "consistency": "eventual"
+              }
+            }
+          },
+          {
+            "method": "CreateLog",
+            "request": {
+              "full_name": "types.v1.HTTPRequestLog",
+              "entity": true
+            },
+            "response": {
+              "full_name": "types.v1.HTTPRequestLog",
+              "entity": true
+            },
+            "pos": {
+              "file": "types/v1/types.proto",
+              "line": 107,
+              "col": 3
+            },
+            "spec": {
+              "create": {}
+            }
+          }
+        ],
+        "pos": {
+          "file": "types/v1/types.proto",
+          "line": 98,
+          "col": 1
+        }
+      }
+    ]
+  },
+  "pg": {
+    "files": {
+      "types/v1/types.proto": {
+        "min_version": 16,
+        "extensions": [
+          "vector"
+        ]
+      }
+    },
+    "tables": {
+      "types.v1.HTTPRequestLog": {
+        "indexes": [
+          {
+            "name": "logs_by_path",
+            "columns": [
+              {
+                "field": "path"
+              },
+              {
+                "field": "created_at",
+                "desc": true
+              }
+            ],
+            "include": [
+              "status"
+            ],
+            "where": "status \u003e= 500"
+          }
+        ],
+        "index_budget": 3,
+        "columns": {
+          "11": {
+            "custom_type": "numeric(20, 0)",
+            "go_type": "string"
+          },
+          "12": {
+            "custom_type": "numeric(20, 0)",
+            "go_type": "string"
+          },
+          "28": {
+            "type": "numeric"
+          },
+          "30": {
+            "custom_type": "vector(3)",
+            "go_type": "github.com/pgvector/pgvector-go.Vector"
+          },
+          "32": {
+            "type": "double precision"
+          },
+          "33": {
+            "type": "date"
+          },
+          "34": {
+            "type": "inet"
+          }
+        }
+      }
+    }
+  }
+}

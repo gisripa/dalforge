@@ -1,0 +1,31 @@
+// DAL211: explicit index references use existing field names, once each.
+syntax = "proto3";
+
+package dal211;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Order {
+  option (dal.v1.table) = {name: "orders"};
+  option (dal.pg.v1.table) = {
+    indexes: [
+      {
+        name: "orders_by_state"
+        columns: ["order_state", "created_at DESC", "created_at"]
+        include: ["ghost", "note"]
+      },
+      // Valid control: field names, with the renamed column resolved.
+      {
+        name: "orders_by_state_ok"
+        columns: ["state", "created_at DESC"]
+      }
+    ]
+  };
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+  string state = 2 [(dal.v1.field).name = "order_state"];
+  google.protobuf.Timestamp created_at = 3;
+  string note = 5;
+}

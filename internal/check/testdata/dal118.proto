@@ -1,0 +1,33 @@
+// DAL118: update/upsert must not set key or role-managed fields.
+syntax = "proto3";
+
+package dal118;
+
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Order {
+  string id = 1 [(dal.v1.field).primary_key = true];
+  string note = 2;
+  int64 version = 3 [(dal.v1.field).role = ROLE_VERSION];
+  google.protobuf.Timestamp updated_at = 4 [(dal.v1.field).role = ROLE_UPDATE_TIME];
+}
+
+service OrderStore {
+  option (dal.v1.store) = {entity: "Order"};
+
+  // Valid control: the default column set excludes keys and roles.
+  rpc UpdateDefault(Order) returns (Order) {
+    option (dal.v1.query) = {update: {}};
+  }
+  rpc UpdateKey(Order) returns (Order) {
+    option (dal.v1.query) = {
+      update: {columns: ["id", "note"]}
+    };
+  }
+  rpc UpsertRoles(Order) returns (Order) {
+    option (dal.v1.query) = {
+      upsert: {columns: ["note", "version", "updated_at"]}
+    };
+  }
+}

@@ -1,0 +1,35 @@
+// DAL204: identifiers must be valid, unquoted, short enough and not reserved.
+syntax = "proto3";
+
+package dal204;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+
+// Table name defaults to "order", a reserved word.
+message Order {
+  option (dal.v1.table) = {};
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+  string select = 2;
+  string user_id = 3 [(dal.v1.field).name = "UserId"];
+  // 64 bytes: over the limit.
+  string long = 4 [(dal.v1.field).name = "a_column_name_that_is_far_too_long_for_postgres_identifiers_xyzw"];
+  // Valid control: exactly 63 bytes.
+  string edge = 5 [(dal.v1.field).name = "a_column_name_that_is_far_too_long_for_postgres_identifiers_xyz"];
+}
+
+message Shipment {
+  option (dal.v1.table) = {name: "shipments"};
+  option (dal.pg.v1.table) = {
+    indexes: [
+      {
+        name: "Shipments-By-Order"
+        columns: ["order_id"]
+      }
+    ]
+  };
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+  string order_id = 2;
+}

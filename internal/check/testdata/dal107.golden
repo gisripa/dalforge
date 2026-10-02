@@ -1,0 +1,9 @@
+dal107.proto:34:3: error DAL107: rpc GetById request dal107.WrongKey: field id is int64, want string; unexpected field extra
+dal107.proto:37:3: error DAL107: rpc GetReturnsKey response dal107.Key: must be the entity dal107.Order
+dal107.proto:40:3: error DAL107: rpc ListByStatus request dal107.ListByStatusRequest: field status is string, want dal107.Status; missing field string page_token
+dal107.proto:40:3: error DAL107: rpc ListByStatus response dal107.Order: must be a page message, not an entity: repeated dal107.Order <name> and string next_page_token
+dal107.proto:45:3: error DAL107: rpc ListByStatusAndFulfilledAt request dal107.RangeRequest: missing field timestamp fulfilled_at_to
+dal107.proto:53:3: error DAL107: rpc ListByAccount request dal107.Order: is an entity; want a message with exactly: string account_id, int32 page_size, string page_token
+dal107.proto:53:3: error DAL107: rpc ListByAccount response dal107.TwoLists: want exactly one repeated dal107.Order field, found 2; missing field string next_page_token
+dal107.proto:58:3: error DAL107: rpc CreateFromKey request dal107.Key: must be the entity dal107.Order
+dal107.proto:61:3: error DAL107: rpc DeleteReturnsKey response dal107.Key: must be the entity dal107.Order or google.protobuf.Empty

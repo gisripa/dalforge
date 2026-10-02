@@ -1,0 +1,16 @@
+// Entity declared in one file...
+syntax = "proto3";
+
+package shop.v1;
+
+import "dal/v1/options.proto";
+
+message Account {
+  option (dal.v1.table) = {name: "accounts"};
+
+  string id = 1 [(dal.v1.field) = {
+    format: FORMAT_UUID
+    primary_key: true
+  }];
+  string name = 2;
+}

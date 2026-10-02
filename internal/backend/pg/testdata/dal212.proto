@@ -1,0 +1,17 @@
+// DAL212 (info): an optional field with a default can't be inserted as NULL.
+syntax = "proto3";
+
+package dal212;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+
+message Order {
+  option (dal.v1.table) = {name: "orders"};
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+  optional string channel = 2 [(dal.pg.v1.column).default = "'web'"];
+  // Valid controls: a required field with a default, and an optional one without.
+  string status = 3 [(dal.pg.v1.column).default = "'pending'"];
+  optional string note = 4;
+}

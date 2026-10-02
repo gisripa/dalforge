@@ -1,0 +1,39 @@
+{
+  "tables": [
+    {
+      "name": "accounts",
+      "entity": "shop.v1.Account",
+      "columns": [
+        {
+          "name": "id",
+          "field": "id",
+          "number": 1,
+          "type": "uuid",
+          "not_null": true,
+          "go_type": {
+            "import": "github.com/google/uuid",
+            "name": "UUID"
+          }
+        },
+        {
+          "name": "name",
+          "field": "name",
+          "number": 2,
+          "type": "text",
+          "not_null": true,
+          "go_type": {
+            "name": "string"
+          }
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "pos": {
+        "file": "shop/v1/account.proto",
+        "line": 8,
+        "col": 1
+      }
+    }
+  ]
+}

@@ -7,6 +7,8 @@ import "dal/pg/v1/options.proto";
 import "dal/v1/options.proto";
 import "google/protobuf/timestamp.proto";
 
+option (dal.pg.v1.file) = {min_version: 16};
+
 message Order {
   // "order" is a reserved word, so the table name is explicit.
   option (dal.v1.table) = {

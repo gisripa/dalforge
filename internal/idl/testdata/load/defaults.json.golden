@@ -1,0 +1,568 @@
+{
+  "schema": {
+    "entities": [
+      {
+        "full_name": "defaults.v1.Item",
+        "table": "item",
+        "table_source": "defaulted",
+        "fields": [
+          {
+            "name": "tenant_id",
+            "column": "tenant_id",
+            "number": 1,
+            "kind": "string",
+            "format": "uuid",
+            "primary_key": true,
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 15,
+              "col": 3
+            }
+          },
+          {
+            "name": "id",
+            "column": "id",
+            "number": 2,
+            "kind": "string",
+            "format": "uuid",
+            "primary_key": true,
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 19,
+              "col": 3
+            }
+          },
+          {
+            "name": "sku",
+            "column": "sku",
+            "number": 3,
+            "kind": "string",
+            "unique": true,
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 23,
+              "col": 3
+            }
+          },
+          {
+            "name": "name",
+            "column": "name",
+            "number": 4,
+            "kind": "string",
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 24,
+              "col": 3
+            }
+          },
+          {
+            "name": "color",
+            "column": "color",
+            "number": 5,
+            "kind": "string",
+            "nullable": true,
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 25,
+              "col": 3
+            }
+          },
+          {
+            "name": "version",
+            "column": "version",
+            "number": 7,
+            "kind": "int64",
+            "role": "version",
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 26,
+              "col": 3
+            }
+          },
+          {
+            "name": "created_at",
+            "column": "created_at",
+            "number": 8,
+            "kind": "timestamp",
+            "role": "create_time",
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 27,
+              "col": 3
+            }
+          },
+          {
+            "name": "updated_at",
+            "column": "updated_at",
+            "number": 9,
+            "kind": "timestamp",
+            "role": "update_time",
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 28,
+              "col": 3
+            }
+          },
+          {
+            "name": "deleted_at",
+            "column": "deleted_at",
+            "number": 10,
+            "kind": "timestamp",
+            "nullable": true,
+            "role": "delete_time",
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 29,
+              "col": 3
+            }
+          }
+        ],
+        "reserved": {
+          "numbers": [
+            [
+              6,
+              6
+            ]
+          ],
+          "names": [
+            "legacy_code"
+          ]
+        },
+        "pos": {
+          "file": "defaults/v1/defaults.proto",
+          "line": 10,
+          "col": 1
+        }
+      }
+    ],
+    "stores": [
+      {
+        "full_name": "defaults.v1.ItemStore",
+        "entity": "defaults.v1.Item",
+        "queries": [
+          {
+            "method": "GetItem",
+            "request": {
+              "full_name": "defaults.v1.ItemKey",
+              "fields": [
+                {
+                  "name": "tenant_id",
+                  "number": 1,
+                  "kind": "string"
+                },
+                {
+                  "name": "id",
+                  "number": 2,
+                  "kind": "string"
+                }
+              ]
+            },
+            "response": {
+              "full_name": "defaults.v1.Item",
+              "entity": true
+            },
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 35,
+              "col": 3
+            },
+            "spec": {
+              "get": {
+                "by": {
+                  "names": [
+                    "tenant_id",
+                    "id"
+                  ],
+                  "source": "defaulted"
+                },
+                "consistency": "eventual"
+              }
+            }
+          },
+          {
+            "method": "GetItemBySku",
+            "request": {
+              "full_name": "defaults.v1.SkuRequest",
+              "fields": [
+                {
+                  "name": "sku",
+                  "number": 1,
+                  "kind": "string"
+                }
+              ]
+            },
+            "response": {
+              "full_name": "defaults.v1.Item",
+              "entity": true
+            },
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 40,
+              "col": 3
+            },
+            "spec": {
+              "get": {
+                "by": {
+                  "names": [
+                    "sku"
+                  ],
+                  "source": "declared"
+                },
+                "consistency": "strong"
+              }
+            }
+          },
+          {
+            "method": "ListItemsByTenant",
+            "request": {
+              "full_name": "defaults.v1.TenantPage",
+              "fields": [
+                {
+                  "name": "tenant_id",
+                  "number": 1,
+                  "kind": "string"
+                },
+                {
+                  "name": "page_size",
+                  "number": 2,
+                  "kind": "int32"
+                },
+                {
+                  "name": "page_token",
+                  "number": 3,
+                  "kind": "string"
+                }
+              ]
+            },
+            "response": {
+              "full_name": "defaults.v1.ItemPage",
+              "fields": [
+                {
+                  "name": "items",
+                  "number": 1,
+                  "kind": "message",
+                  "repeated": true,
+                  "message": "defaults.v1.Item"
+                },
+                {
+                  "name": "next_page_token",
+                  "number": 2,
+                  "kind": "string"
+                }
+              ]
+            },
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 48,
+              "col": 3
+            },
+            "spec": {
+              "list": {
+                "eq": [
+                  "tenant_id"
+                ],
+                "order_by": {
+                  "keys": [
+                    {
+                      "field": "id"
+                    }
+                  ],
+                  "source": "defaulted"
+                },
+                "consistency": "eventual"
+              }
+            }
+          },
+          {
+            "method": "ListItemsByTenantAndCreatedAt",
+            "request": {
+              "full_name": "defaults.v1.TenantRangePage",
+              "fields": [
+                {
+                  "name": "tenant_id",
+                  "number": 1,
+                  "kind": "string"
+                },
+                {
+                  "name": "created_at_from",
+                  "number": 2,
+                  "kind": "timestamp"
+                },
+                {
+                  "name": "created_at_to",
+                  "number": 3,
+                  "kind": "timestamp"
+                },
+                {
+                  "name": "page_size",
+                  "number": 4,
+                  "kind": "int32"
+                },
+                {
+                  "name": "page_token",
+                  "number": 5,
+                  "kind": "string"
+                }
+              ]
+            },
+            "response": {
+              "full_name": "defaults.v1.ItemPage",
+              "fields": [
+                {
+                  "name": "items",
+                  "number": 1,
+                  "kind": "message",
+                  "repeated": true,
+                  "message": "defaults.v1.Item"
+                },
+                {
+                  "name": "next_page_token",
+                  "number": 2,
+                  "kind": "string"
+                }
+              ]
+            },
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 53,
+              "col": 3
+            },
+            "spec": {
+              "list": {
+                "eq": [
+                  "tenant_id"
+                ],
+                "range": "created_at",
+                "order_by": {
+                  "keys": [
+                    {
+                      "field": "created_at"
+                    }
+                  ],
+                  "source": "defaulted"
+                },
+                "max_page_size": 100,
+                "consistency": "eventual"
+              }
+            }
+          },
+          {
+            "method": "ListItemsByTenantNewest",
+            "request": {
+              "full_name": "defaults.v1.TenantPage",
+              "fields": [
+                {
+                  "name": "tenant_id",
+                  "number": 1,
+                  "kind": "string"
+                },
+                {
+                  "name": "page_size",
+                  "number": 2,
+                  "kind": "int32"
+                },
+                {
+                  "name": "page_token",
+                  "number": 3,
+                  "kind": "string"
+                }
+              ]
+            },
+            "response": {
+              "full_name": "defaults.v1.ItemPage",
+              "fields": [
+                {
+                  "name": "items",
+                  "number": 1,
+                  "kind": "message",
+                  "repeated": true,
+                  "message": "defaults.v1.Item"
+                },
+                {
+                  "name": "next_page_token",
+                  "number": 2,
+                  "kind": "string"
+                }
+              ]
+            },
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 62,
+              "col": 3
+            },
+            "spec": {
+              "list": {
+                "eq": [
+                  "tenant_id"
+                ],
+                "order_by": {
+                  "keys": [
+                    {
+                      "field": "created_at",
+                      "desc": true
+                    },
+                    {
+                      "field": "id"
+                    }
+                  ],
+                  "source": "declared"
+                },
+                "consistency": "eventual"
+              }
+            }
+          },
+          {
+            "method": "CreateItem",
+            "request": {
+              "full_name": "defaults.v1.Item",
+              "entity": true
+            },
+            "response": {
+              "full_name": "defaults.v1.Item",
+              "entity": true
+            },
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 70,
+              "col": 3
+            },
+            "spec": {
+              "create": {}
+            }
+          },
+          {
+            "method": "UpdateItem",
+            "request": {
+              "full_name": "defaults.v1.Item",
+              "entity": true
+            },
+            "response": {
+              "full_name": "defaults.v1.Item",
+              "entity": true
+            },
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 75,
+              "col": 3
+            },
+            "spec": {
+              "update": {
+                "columns": {
+                  "names": [
+                    "sku",
+                    "name",
+                    "color"
+                  ],
+                  "source": "defaulted"
+                }
+              }
+            }
+          },
+          {
+            "method": "UpsertItem",
+            "request": {
+              "full_name": "defaults.v1.Item",
+              "entity": true
+            },
+            "response": {
+              "full_name": "defaults.v1.Item",
+              "entity": true
+            },
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 80,
+              "col": 3
+            },
+            "spec": {
+              "upsert": {
+                "conflict_on": {
+                  "names": [
+                    "tenant_id",
+                    "id"
+                  ],
+                  "source": "defaulted"
+                },
+                "columns": {
+                  "names": [
+                    "sku",
+                    "name",
+                    "color"
+                  ],
+                  "source": "defaulted"
+                }
+              }
+            }
+          },
+          {
+            "method": "UpsertItemBySku",
+            "request": {
+              "full_name": "defaults.v1.Item",
+              "entity": true
+            },
+            "response": {
+              "full_name": "defaults.v1.Item",
+              "entity": true
+            },
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 85,
+              "col": 3
+            },
+            "spec": {
+              "upsert": {
+                "conflict_on": {
+                  "names": [
+                    "sku"
+                  ],
+                  "source": "declared"
+                },
+                "columns": {
+                  "names": [
+                    "name"
+                  ],
+                  "source": "declared"
+                }
+              }
+            }
+          },
+          {
+            "method": "DeleteItem",
+            "request": {
+              "full_name": "defaults.v1.ItemKey",
+              "fields": [
+                {
+                  "name": "tenant_id",
+                  "number": 1,
+                  "kind": "string"
+                },
+                {
+                  "name": "id",
+                  "number": 2,
+                  "kind": "string"
+                }
+              ]
+            },
+            "response": {
+              "full_name": "defaults.v1.Item",
+              "entity": true
+            },
+            "pos": {
+              "file": "defaults/v1/defaults.proto",
+              "line": 93,
+              "col": 3
+            },
+            "spec": {
+              "delete": {}
+            }
+          }
+        ],
+        "pos": {
+          "file": "defaults/v1/defaults.proto",
+          "line": 32,
+          "col": 1
+        }
+      }
+    ]
+  },
+  "pg": {}
+}

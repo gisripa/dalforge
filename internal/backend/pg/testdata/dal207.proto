@@ -1,0 +1,15 @@
+// DAL207: the file needs Postgres 17, but the test target is 16.
+syntax = "proto3";
+
+package dal207;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+
+option (dal.pg.v1.file) = {min_version: 17};
+
+message Item {
+  option (dal.v1.table) = {name: "items"};
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+}

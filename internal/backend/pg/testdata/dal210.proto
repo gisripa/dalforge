@@ -1,0 +1,20 @@
+// DAL210: duplicate table and column names.
+syntax = "proto3";
+
+package dal210;
+
+import "dal/v1/options.proto";
+
+message Order {
+  option (dal.v1.table) = {name: "orders"};
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+  string state = 2;
+  string status = 3 [(dal.v1.field).name = "state"];
+}
+
+message LegacyOrder {
+  option (dal.v1.table) = {name: "orders"};
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+}

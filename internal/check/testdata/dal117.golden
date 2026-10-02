@@ -1,0 +1,6 @@
+dal117.proto:18:3: error DAL117: rpc GetByMissing get.by: dal117.Order has no field "missing"
+dal117.proto:24:3: error DAL117: rpc ListByColumnName list.eq: dal117.Order has no field "order_state" ("order_state" is the column of field "state"; references use field names)
+dal117.proto:29:3: error DAL117: rpc ListBadRangeAndSort list.order_by: field "id" is listed more than once
+dal117.proto:29:3: error DAL117: rpc ListBadRangeAndSort list.range: dal117.Order has no field "nope"
+dal117.proto:37:3: error DAL117: rpc UpdateDuplicate update.columns: field "note" is listed more than once
+dal117.proto:42:3: error DAL117: rpc UpsertBadConflict upsert.conflict_on: dal117.Order has no field "ghost"

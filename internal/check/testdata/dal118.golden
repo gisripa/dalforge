@@ -1,0 +1,3 @@
+dal118.proto:23:3: error DAL118: rpc UpdateKey: update.columns sets key field "id"; keys identify the row and never change
+dal118.proto:28:3: error DAL118: rpc UpsertRoles: upsert.columns sets "updated_at", which the generated code manages (role update_time)
+dal118.proto:28:3: error DAL118: rpc UpsertRoles: upsert.columns sets "version", which the generated code manages (role version)

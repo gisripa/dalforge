@@ -1,0 +1,21 @@
+// ...and its store in another, naming it by full name.
+syntax = "proto3";
+
+package shop.v1;
+
+import "dal/v1/options.proto";
+import "shop/v1/account.proto";
+
+service AccountStore {
+  option (dal.v1.store) = {entity: "shop.v1.Account"};
+
+  rpc GetAccount(AccountKey) returns (Account) {
+    option (dal.v1.query) = {
+      get: {}
+    };
+  }
+}
+
+message AccountKey {
+  string id = 1;
+}

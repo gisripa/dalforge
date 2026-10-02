@@ -1,0 +1,1 @@
+dal212.proto:13:3: info DAL212: field "channel" is optional and has default 'web': a nil insert parameter means "use the default", so Create can't insert NULL (Update can)

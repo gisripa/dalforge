@@ -1,0 +1,5 @@
+dal208.proto:21:3: error DAL208: field "embedding": custom_type vector(3) comes from the "vector" extension; declare it with option (dal.pg.v1.file) = {extensions: ["vector"]} in dal208.proto
+dal208.proto:25:3: error DAL208: field "shape": custom_type geometry(Point, 4326) comes from the "postgis" extension; declare it with option (dal.pg.v1.file) = {extensions: ["postgis"]} in dal208.proto
+dal208.proto:25:3: error DAL208: field "shape": custom_type geometry(Point, 4326) needs go_type, the Go type sqlc should use
+dal208.proto:26:3: error DAL208: field "label" sets go_type without custom_type; go_type only applies to custom types
+dal208.proto:27:3: error DAL208: field "blob": go_type "not a type" is not a Go type name
