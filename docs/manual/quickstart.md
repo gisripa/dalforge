@@ -92,7 +92,7 @@ clean and you can explore the output freely:
 ```text
 examples/orders/
 ├── dalforge.yaml                  yours: project config
-├── dalforge.lock                  yours (committed): pins dalforge, its options and sqlc
+├── dalforge.lock                  pins dalforge, its options and sqlc (a real project commits it*)
 ├── proto/shop/v1/shop.proto       yours: entities and access patterns
 ├── queries/custom/                yours: hand-written sqlc queries (the escape hatch)
 │   ├── accounts.sql                 LockAccountForKeyShare
@@ -108,6 +108,10 @@ examples/orders/
         ├── dal.go                   model aliases, params, Read/Write/Repository interfaces
         └── repository.go            the implementation, WithTx, Tx
 ```
+
+\* The example gitignores its lock because it always runs the dalforge built
+from this checkout. In your project, commit `dalforge.lock` so everyone
+generates with the same toolchain ([details](project-setup.md#dalforgelock)).
 
 ### The input
 

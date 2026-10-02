@@ -3,3 +3,8 @@
 /queries/generated/
 /sqlc.yaml
 /gen/
+
+# A real project commits dalforge.lock to pin its toolchain. This example
+# always runs the dalforge built from this repository's checkout, so a pinned
+# version would be wrong on every release tag; dalforge generate recreates it.
+/dalforge.lock
