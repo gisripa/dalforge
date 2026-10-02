@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/brianvoe/gofakeit/v7 v7.17.1
-	github.com/gisripa/dalforge v0.0.0
+	github.com/gisripa/dalforge/dal v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
 )
@@ -17,6 +17,6 @@ require (
 	golang.org/x/text v0.29.0 // indirect
 )
 
-// The example uses this repository's runtime (dal, dalpg). A real project
+// The example uses this repository's runtime module (dal, dalpg). A real project
 // would require a released version instead.
-replace github.com/gisripa/dalforge => ../..
+replace github.com/gisripa/dalforge/dal => ../../dal

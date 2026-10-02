@@ -44,7 +44,10 @@ extend google.protobuf.MethodOptions {
 
 // Table configures the entity backing a message.
 message Table {
-  // Table name. Defaults to the snake_case message name.
+  // Table name. Defaults to the snake_case message name (HTTPRequestLog
+  // becomes http_request_log). It must be a valid unquoted identifier
+  // (DAL204); a default that's a reserved word, such as order or user, needs
+  // an explicit name.
   string name = 1;
 
   // Fields the data is sharded by. Recorded and validated (the fields must
@@ -58,7 +61,7 @@ message Table {
 //
 // To remove a field, delete it and reserve its number and name. Its column is
 // retired, not dropped: schema changes are always additive, so code from the
-// previous release keeps working (see docs/design.md §8).
+// previous release keeps working.
 message Field {
   // Was a lifecycle state (STATE_DEPRECATED), removed in favour of retiring
   // fields by deleting them.
@@ -68,14 +71,17 @@ message Field {
   // Column name. Defaults to the proto field name.
   string name = 1;
 
-  // Refines the proto type. It drives the Go domain type (e.g. uuid.UUID for
-  // a string) and each backend's physical type.
+  // Refines a string field's type: it sets the Go type (e.g. uuid.UUID for
+  // FORMAT_UUID) and the column type.
   Format format = 2;
 
   // Marks the field as part of the primary key. Multiple fields form a
-  // composite key, ordered by their declaration order in the message.
+  // composite key, ordered by their declaration order in the message. A
+  // FORMAT_UUID key left nil in a create is assigned a UUIDv7.
   bool primary_key = 3;
 
+  // Makes the column unique. On an entity with ROLE_DELETE_TIME it's unique
+  // among live rows only, so a soft-deleted row doesn't block its value.
   bool unique = 4;
 
   // Behaviour the generated code manages for this column.
@@ -96,13 +102,16 @@ enum Format {
 // Role marks columns whose values the generated code manages.
 enum Role {
   ROLE_UNSPECIFIED = 0;
-  // Set on insert, never updated.
+  // On a google.protobuf.Timestamp: set to now() on insert, never updated.
   ROLE_CREATE_TIME = 1;
-  // Set on insert and on every update.
+  // On a google.protobuf.Timestamp: set to now() on insert and on every
+  // update.
   ROLE_UPDATE_TIME = 2;
-  // Soft delete marker: Delete sets it, and reads exclude rows where it is set.
+  // On an optional google.protobuf.Timestamp: soft delete. Delete sets it,
+  // and every generated statement ignores rows where it is set.
   ROLE_DELETE_TIME = 3;
-  // Optimistic lock: updates compare-and-swap on it and increment it.
+  // On a required int64 (or int32): optimistic locking. It starts at 1, and
+  // every update is a compare-and-swap on it that increments it.
   ROLE_VERSION = 4;
 }
 
@@ -126,9 +135,10 @@ message Query {
 
 // Consistency is the read consistency an rpc needs.
 enum Consistency {
-  // Eventual: Postgres reads from the reader pool; DynamoDB does an
-  // eventually consistent read.
+  // Unset: eventual.
   CONSISTENCY_UNSPECIFIED = 0;
+  // Eventual: Postgres reads from the reader pool, which may lag the writer
+  // slightly; DynamoDB does an eventually consistent read.
   CONSISTENCY_EVENTUAL = 1;
   // Strong, for read-after-write: Postgres reads from the writer pool;
   // DynamoDB sets ConsistentRead (not available on secondary indexes).
@@ -141,6 +151,7 @@ message Get {
   // covered by a unique field or unique index.
   repeated string by = 1;
 
+  // Which copy of the data the read may use. Defaults to eventual.
   Consistency consistency = 2;
 }
 
@@ -150,7 +161,9 @@ message List {
   // Equality filter fields.
   repeated string eq = 1;
 
-  // Optional range filter field. It must be the leading order_by field.
+  // Optional range filter field. It must be the leading order_by field. The
+  // filter is half-open: the request carries <range>_from (inclusive) and
+  // <range>_to (exclusive), both required.
   string range = 2;
 
   // Sort fields, each optionally suffixed with ASC or DESC. When empty, the
@@ -159,14 +172,19 @@ message List {
   // always appended as the keyset tie-breaker.
   repeated string order_by = 3;
 
-  // Page size limits. Zero means the project default.
+  // Page size used when the caller passes 0. Zero here means 50.
   uint32 default_page_size = 4;
+
+  // Largest page size; bigger requests are clamped. Zero here means 500.
   uint32 max_page_size = 5;
 
+  // Which copy of the data the read may use. Defaults to eventual.
   Consistency consistency = 6;
 }
 
-// Create inserts one row and returns it.
+// Create inserts one row and returns it. Every field of its parameters is a
+// pointer, and nil means the column default, NULL, a new UUIDv7 key, or a
+// missing-field error, depending on the field.
 message Create {}
 
 // Update modifies one row by primary key. When the entity has a ROLE_VERSION
@@ -181,7 +199,9 @@ message Update {
 // ROLE_DELETE_TIME column the delete is soft.
 message Delete {}
 
-// Upsert inserts one row, or updates it on conflict.
+// Upsert inserts one row, or updates it on conflict. The last writer wins (the
+// version is bumped without a compare-and-swap), and a soft-deleted row is
+// never revived.
 message Upsert {
   // Conflict target fields. Defaults to the primary key; any other set must
   // be covered by a unique field or unique index.

@@ -44,18 +44,29 @@ done
 """
 
 [tasks.test]
-description = "Run unit tests with the race detector"
-run = "go test -race -count=1 ./..."
+description = "Run unit tests with the race detector (generator and runtime modules)"
+run = [
+  "go test -race -count=1 ./...",
+  "cd dal && go test -race -count=1 ./...",
+]
 
 [tasks."test:update"]
 description = "Rewrite golden files from current output (review the diff afterwards)"
 env = { DALFORGE_UPDATE_GOLDEN = "1" }
 run = "go test -count=1 ./..."
 
+[tasks.docs]
+description = "Regenerate the generated parts of docs/manual (rule catalog, option reference, type tables)"
+env = { DALFORGE_UPDATE_GOLDEN = "1" }
+run = "go test -count=1 ./internal/docgen/"
+
 [tasks."test:integration"]
 description = "Run the tests that need Postgres (runtime error mapping, routing, transactions)"
 depends = ["db:up"]
-run = "go test -tags integration -race -count=1 ./dal/dalpg/ ./internal/integration/"
+run = [
+  "go test -tags integration -race -count=1 ./internal/integration/",
+  "cd dal && go test -tags integration -race -count=1 ./dalpg/",
+]
 
 [tasks."vm:up"]
 description = "Start the dalforge Colima VM (no-op if running, or in CI)"
@@ -93,19 +104,20 @@ description = "Run tests with a coverage report"
 run = [
   "go test -coverprofile=coverage.out ./...",
   "go tool cover -func=coverage.out",
+  "cd dal && go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out",
 ]
 
 [tasks.fmt]
 description = "Format code"
-run = "golangci-lint fmt"
+run = ["golangci-lint fmt", "cd dal && golangci-lint fmt"]
 
 [tasks.lint]
-description = "Run linters"
-run = "golangci-lint run"
+description = "Run linters (generator and runtime modules)"
+run = ["golangci-lint run", "cd dal && golangci-lint run"]
 
 [tasks.tidy]
-description = "Tidy go.mod / go.sum"
-run = "go mod tidy"
+description = "Tidy go.mod / go.sum (generator, runtime and example modules)"
+run = ["go mod tidy", "cd dal && go mod tidy", "cd examples/orders && go mod tidy"]
 
 [tasks.check]
 description = "Fast checks, no Docker: lint + unit tests + build"

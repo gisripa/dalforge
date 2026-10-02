@@ -35,6 +35,16 @@ var _commands = []command{
 	{name: "lint", summary: "check access patterns, indexes and migrations for unsafe shapes", run: lint},
 	{name: "lock", summary: "show or update dalforge.lock, the pinned dalforge/options/sqlc versions", run: lockCmd},
 	{name: "migrate", summary: "diff the IDL against the schema snapshot and emit migrations", run: notImplemented},
+	{name: "version", summary: "print the dalforge version", run: version},
+}
+
+func version(_ context.Context, args []string, stderr io.Writer) int {
+	if len(args) > 0 {
+		fprintf(stderr, "dalforge version: unexpected arguments %q\n", args)
+		return ExitUsage
+	}
+	fprintf(stderr, "dalforge %s\n", pipeline.Version())
+	return ExitOK
 }
 
 // Run executes dalforge with the given arguments (excluding the program name),

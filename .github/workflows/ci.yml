@@ -1,0 +1,54 @@
+# CI: the same mise tasks as on a laptop. GitHub sets CI=true, which makes
+# mise.toml use the runner's Docker instead of a Colima VM.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call: # the release workflow runs CI first
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Colima and Lima are only for laptops without Docker.
+  MISE_DISABLE_TOOLS: colima,lima
+
+jobs:
+  check:
+    name: Lint, unit and golden tests, generated docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+          key: go-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-${{ runner.os }}-
+      - run: mise run check
+
+  postgres:
+    name: Integration tests and the demo on Postgres 16.9
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-${{ runner.os }}-
+      - run: mise run test:integration
+      # End to end, like a user: generate → sqlc → build → run against Postgres.
+      - run: mise run demo

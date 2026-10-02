@@ -1,0 +1,43 @@
+// DAL119: role fields must have the type their role needs, one field per role.
+syntax = "proto3";
+
+package dal119;
+
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Bad {
+  option (dal.v1.table) = {};
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+  // Not nullable: every insert would violate NOT NULL.
+  google.protobuf.Timestamp deleted_at = 2 [(dal.v1.field).role = ROLE_DELETE_TIME];
+  string version = 3 [(dal.v1.field).role = ROLE_VERSION];
+  optional int64 revision = 4;
+  string created_at = 5 [(dal.v1.field).role = ROLE_CREATE_TIME];
+  google.protobuf.Timestamp touched_at = 6 [(dal.v1.field).role = ROLE_UPDATE_TIME];
+  google.protobuf.Timestamp modified_at = 7 [(dal.v1.field).role = ROLE_UPDATE_TIME];
+}
+
+message NullableVersion {
+  option (dal.v1.table) = {};
+
+  string id = 1 [(dal.v1.field).primary_key = true];
+  optional int64 version = 2 [(dal.v1.field).role = ROLE_VERSION];
+}
+
+// Valid control: every role on the right kind of field.
+message Good {
+  string id = 1 [(dal.v1.field).primary_key = true];
+  int64 version = 2 [(dal.v1.field).role = ROLE_VERSION];
+  google.protobuf.Timestamp created_at = 3 [(dal.v1.field).role = ROLE_CREATE_TIME];
+  google.protobuf.Timestamp updated_at = 4 [(dal.v1.field).role = ROLE_UPDATE_TIME];
+  optional google.protobuf.Timestamp deleted_at = 5 [(dal.v1.field).role = ROLE_DELETE_TIME];
+}
+
+service GoodStore {
+  option (dal.v1.store) = {entity: "Good"};
+  rpc GetGood(Good) returns (Good) {
+    option (dal.v1.query) = {get: {}};
+  }
+}

@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/gisripa/dalforge/dal"
-	"github.com/gisripa/dalforge/internal/pgtest"
+	"github.com/gisripa/dalforge/dal/internal/pgtest"
 )
 
 func exec(t *testing.T, q DBTX, sql string, args ...any) {

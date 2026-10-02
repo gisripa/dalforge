@@ -5,6 +5,9 @@ would be. You write the IDL (`proto/`), a config (`dalforge.yaml`) and,
 optionally, hand-written queries (`queries/custom/`). dalforge generates the
 rest.
 
+For a guided tour of this example (what gets generated, changing an access
+pattern, tripping the linter), see the [Quickstart](../../docs/manual/quickstart.md).
+
 ## Run it
 
 From the repository root:

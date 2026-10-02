@@ -20,7 +20,7 @@ message Doc {
   string title = 5;
   google.protobuf.Timestamp created_at = 6 [(dal.v1.field).role = ROLE_CREATE_TIME];
   optional google.protobuf.Timestamp published_at = 7;
-  google.protobuf.Timestamp deleted_at = 8 [(dal.v1.field).role = ROLE_DELETE_TIME];
+  optional google.protobuf.Timestamp deleted_at = 8 [(dal.v1.field).role = ROLE_DELETE_TIME];
 }
 
 message ByTenant {

@@ -24,12 +24,20 @@ const RuleVendored = "DAL116"
 // Version is this binary's version: the release stamped by `go install
 // …@v0.3.1`, or lock.Devel for anything else.
 func Version() string {
+	if _version != "" {
+		return releaseVersion(_version)
+	}
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return lock.Devel
 	}
 	return releaseVersion(info.Main.Version)
 }
+
+// _version is set by release builds (GoReleaser:
+// -X github.com/gisripa/dalforge/internal/pipeline._version=v1.2.3). Builds
+// without it fall back to the module version Go stamps from build info.
+var _version string
 
 // _pseudo matches the commit stamp of a Go pseudo-version, e.g.
 // "v0.0.0-20261002040003-851063fe8fa3", optionally "+dirty".

@@ -188,8 +188,9 @@ type Table struct {
 	// one here only for partial or covering indexes, or to pin the sort order
 	// that List queries without order_by inherit.
 	Indexes []*Index `protobuf:"bytes,1,rep,name=indexes,proto3" json:"indexes,omitempty"`
-	// Overrides the per-table index budget used by the write-amplification
-	// lint. Zero means the project default.
+	// How many indexes (the primary key, unique columns and list indexes) the
+	// table may have before DAL201 warns: each one adds write cost. Zero means
+	// the default, 5.
 	IndexBudget   uint32 `protobuf:"varint,2,opt,name=index_budget,json=indexBudget,proto3" json:"index_budget,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -250,9 +251,13 @@ type Index struct {
 	Columns []string `protobuf:"bytes,2,rep,name=columns,proto3" json:"columns,omitempty"`
 	// Non-key fields stored in the index (INCLUDE) for index-only scans.
 	Include []string `protobuf:"bytes,3,rep,name=include,proto3" json:"include,omitempty"`
-	// Predicate for a partial index, as a SQL boolean expression.
-	Where         string `protobuf:"bytes,4,opt,name=where,proto3" json:"where,omitempty"`
-	Unique        bool   `protobuf:"varint,5,opt,name=unique,proto3" json:"unique,omitempty"`
+	// Predicate for a partial index, as a SQL boolean expression. A list uses
+	// a partial index only if this is exactly its own filter
+	// (deleted_at IS NULL); otherwise it's for custom queries.
+	Where string `protobuf:"bytes,4,opt,name=where,proto3" json:"where,omitempty"`
+	// Makes the index unique. A unique index can back a get.by or an
+	// upsert.conflict_on on its columns (DAL104).
+	Unique        bool `protobuf:"varint,5,opt,name=unique,proto3" json:"unique,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -326,7 +331,7 @@ func (x *Index) GetUnique() bool {
 type Column struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Physical type. When unset it is inferred from the proto type and the
-	// dal.v1 format; see docs/design.md for the mapping.
+	// dal.v1 format (see Types in the manual).
 	//
 	// Types that are valid to be assigned to PgType:
 	//
@@ -337,7 +342,7 @@ type Column struct {
 	Default string `protobuf:"bytes,3,opt,name=default,proto3" json:"default,omitempty"`
 	// Go type for a custom_type column, as "import/path.Type", e.g.
 	// "github.com/pgvector/pgvector-go.Vector". It's passed to sqlc as a type
-	// override and used in the domain struct. Required with custom_type.
+	// override and becomes the model field's type. Required with custom_type.
 	GoType        string `protobuf:"bytes,4,opt,name=go_type,json=goType,proto3" json:"go_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -417,6 +422,8 @@ type isColumn_PgType interface {
 }
 
 type Column_Type struct {
+	// A first-class Postgres type. Only types that fit the field's proto type
+	// are allowed (DAL209), since the Go type follows the proto type.
 	Type Type `protobuf:"varint,1,opt,name=type,proto3,enum=dal.pg.v1.Type,oneof"`
 }
 

@@ -53,14 +53,14 @@ func TestGeneratedImports(t *testing.T) {
 }
 
 // TestProtobufStaysInTheLoader: only internal/idl may depend on protobuf.
-// The IR, the checks, the backend, and the runtime that generated code
-// imports must not.
+// The IR, the checks and the backend must not. (The runtime that generated
+// code imports is its own module, github.com/gisripa/dalforge/dal, whose
+// go.mod has no protobuf dependency at all.)
 func TestProtobufStaysInTheLoader(t *testing.T) {
 	for _, pkg := range []string{
 		"github.com/gisripa/dalforge/internal/ir/...",
 		"github.com/gisripa/dalforge/internal/check",
 		"github.com/gisripa/dalforge/internal/backend/pg",
-		"github.com/gisripa/dalforge/dal/...",
 	} {
 		out, err := exec.Command("go", "list", "-deps", pkg).Output()
 		if err != nil {

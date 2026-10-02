@@ -1,0 +1,45 @@
+# Release: push a tag vX.Y.Z on main. CI runs first; then GoReleaser builds the
+# dalforge binaries and publishes a GitHub Release, and the runtime module
+# (github.com/gisripa/dalforge/dal) gets the matching dal/vX.Y.Z tag, since
+# generated code and the runtime are released in lockstep. See RELEASING.md.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release and push the dal/ tag
+    env:
+      MISE_DISABLE_TOOLS: colima,lima
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # GoReleaser builds the changelog from history
+      - uses: jdx/mise-action@v2
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag the runtime module
+        run: |
+          tag="dal/${GITHUB_REF_NAME}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null; then
+            echo "${tag} already exists"
+          else
+            git tag "${tag}" "${GITHUB_SHA}"
+            git push origin "refs/tags/${tag}"
+          fi

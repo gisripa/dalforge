@@ -37,6 +37,7 @@ func TestRun(t *testing.T) {
 		{name: "generate help", args: []string{"generate", "-h"}, wantCode: ExitOK, wantStderr: "-config"},
 		{name: "missing config", args: []string{"lint", "-config", "/nonexistent/dalforge.yaml"}, wantCode: ExitError, wantStderr: "no such file"},
 		{name: "stray argument", args: []string{"lint", "extra"}, wantCode: ExitUsage, wantStderr: "unexpected arguments"},
+		{name: "version", args: []string{"version"}, wantCode: ExitOK, wantStderr: "dalforge (devel)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

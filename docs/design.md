@@ -211,20 +211,34 @@ sqlc = "1.30.0"
   regenerate different code.
 - **Vendored copies:** copies of the options protos kept for editor or buf
   tooling are checked against the lock's hashes (`DAL116`).
-- **Distribution:** dalforge is meant to be installed with mise's `go:`
-  backend, pinned in the consuming repo's `mise.toml`:
+- **Distribution (decided 2026-10-02):** a `vX.Y.Z` tag runs CI, then
+  GoReleaser publishes linux/darwin × amd64/arm64 binaries with checksums to
+  GitHub Releases (`.goreleaser.yaml`, `.github/workflows/release.yml`).
+  Consumers pin it in their `mise.toml`, either as a prebuilt binary or built
+  from source:
 
   ```toml
   [tools]
-  "go:github.com/gisripa/dalforge/cmd/dalforge" = "0.3.1"
+  "github:gisripa/dalforge" = "0.3.1"
+  # or: "go:github.com/gisripa/dalforge/cmd/dalforge" = "0.3.1"
   ```
+- **The runtime is its own module (decided 2026-10-02):**
+  `github.com/gisripa/dalforge/dal` (packages `dal`, `dal/dalpg`) has its own
+  `go.mod`, so importing it doesn't pull the generator's dependencies
+  (protocompile, yaml, protobuf) into a user's module graph. It's released in
+  lockstep: the release workflow tags `dal/vX.Y.Z` on the same commit as
+  `vX.Y.Z`, and users use the same version for both. The root module never
+  imports the runtime (generated code names it only as a string), so it needs
+  no `replace` directive, which `go install …@version` would reject.
 
   The version lives in `mise.toml`, not the user's `go.mod`, so `go.sum`
   never pins it. That's why dalforge needs its own lock. The lock is still
   install-agnostic, so a release binary or Homebrew install is checked the
   same way.
-- **Version detection:** `go install …@v0.3.1` stamps the release into the
-  binary, and dalforge reads it with `debug.ReadBuildInfo()` (no ldflags).
+- **Version detection:** release binaries get the version through ldflags
+  (`internal/pipeline._version`); `go install …@v0.3.1` stamps it into the
+  build info, which dalforge reads with `debug.ReadBuildInfo()` otherwise.
+  `dalforge version` prints it.
   - **Local builds** are recorded as `(devel)` and only warn on a mismatch, so
     work on dalforge itself isn't blocked. That includes the pseudo-versions
     Go stamps on builds from a git checkout
@@ -236,8 +250,8 @@ sqlc = "1.30.0"
     info, so a vendored source copy and the embedded descriptor hash
     identically. A stale vendored copy is a DAL116 *warning*: generation
     continues with the bundled options.
-- **No cgo:** dalforge must stay pure Go, because `go install` compiles on the
-  user's machine and cgo would require a C toolchain and slow installs. Its
+- **No cgo:** dalforge must stay pure Go, so `go install` works without a C
+  toolchain and release binaries cross-compile (`CGO_ENABLED=0`). Its
   current dependencies (protocompile, pgx) are pure Go, and any new dependency
   has to be too.
 
@@ -387,12 +401,12 @@ comes from the core layer and is the same for every backend.
 | `string` + `FORMAT_JSON` | `jsonb` | `json.RawMessage` |
 | `bool` | `boolean` | `bool` |
 | `int32`, `sint32`, `sfixed32` | `integer` | `int32` |
-| `int64`, `sint64`, `sfixed64`, `uint32` | `bigint` | `int64` |
+| `int64`, `sint64`, `sfixed64`, `uint32`, `fixed32` | `bigint` | `int64` |
 | `uint64` | lint error; requires `custom_type` | — |
 | `float` / `double` | `real` / `double precision` | `float32` / `float64` |
 | `bytes` | `bytea` | `[]byte` |
 | `google.protobuf.Timestamp` | `timestamptz` | `time.Time` |
-| enum | `text` (value name) | a generated string type |
+| enum | `text` (value name, by convention) | `string` (no generated constants or validation yet) |
 | repeated scalar | `<type>[]` | `[]T` |
 | message, map, `google.protobuf.Struct` | `jsonb` | `json.RawMessage` |
 
@@ -646,6 +660,7 @@ Core (every backend):
 | DAL115 | error | a nullable column is in `order_by` without also being the `range` column |
 | DAL117 | error | a query reference (`by`, `eq`, `range`, `order_by`, `columns`, `conflict_on`) names a missing or repeated field; a column name used by mistake gets a hint |
 | DAL118 | error | `update`/`upsert` `columns` sets a key field or a role-managed field |
+| DAL119 | error | a role on the wrong field type (time roles: Timestamp; `ROLE_DELETE_TIME`: optional Timestamp; `ROLE_VERSION`: required int32/int64), on a key or repeated field, or two fields with one role |
 | DAL116 | warning | a vendored copy of the options protos (under a proto root) differs from the options bundled in the binary, which are the ones dalforge uses |
 
 Postgres:
@@ -1165,8 +1180,8 @@ DALForge:
   a `dal.RetrierFunc` closure, or an adapter over a library such as
   [failsafe-go](https://github.com/failsafe-go/failsafe-go), a Go port of Java's
   Failsafe with retry policies, backoff, circuit breakers and bulkheads.
-  `dal.ShouldRetry` works as its retry predicate. The adapter lives in
-  `examples/`, so the runtime doesn't take on the dependency.
+  `dal.ShouldRetry` works as its retry predicate. No adapter ships yet; one
+  would live in `examples/`, so the runtime doesn't take on the dependency.
 - **`dalpg.WithClassifier(func(err error, base dal.Retryability) dal.Retryability)`**
   adjusts the SQLSTATE mapping without replacing the policy. For example, you
   could treat `57014` as retryable.
@@ -1513,12 +1528,31 @@ is a first-class deliverable. This design doc records decisions and their
 reasons; the manual teaches users every option, access pattern, combination,
 limitation, type mapping and lint rule, without relying on `examples/`.
 
-The manual is kept true by tests:
-- every rule ID has a catalog entry, and every option field is documented;
-- complete IDL snippets in the manual compile;
-- diagnostics link to their rule entry.
+**Generated where it must match the code (decided 2026-10-02).** The parts
+that drift are generated, and `check` fails while they're stale
+(`internal/docgen`; `mise run docs` regenerates):
+- the **rule catalog** (`lint-rules.md`) from `internal/rules/catalog/*.md`,
+  one Markdown file per rule with a header (severity, scope, title,
+  planned). `internal/rules` tests that the catalog and the rule constants
+  match both ways, and that the severity each `diags.Add` site uses is the
+  documented one. The files are embedded in the binary, ready for a future
+  `dalforge lint -explain`;
+- the **option reference** (`options.md`) from the comments in the options
+  protos, which are therefore the source of truth;
+- the **type tables** in `types.md`, spliced between `<!-- generated:… -->`
+  markers, by building a probe IDL through the real loader and pg backend.
 
-The manual is written once the MVP exists (end of phase 2 plus a runnable demo), so it describes a stable surface. From then on, every increment updates the sections it affects.
+The narrative chapters are hand-written; `internal/manualtest` checks that
+every relative link and anchor in the manual resolves.
+
+Planned: complete IDL snippets in the manual compile; diagnostics link to
+their rule entry.
+
+**Written 2026-10-01**, after the MVP: a quickstart (run the demo, tour the
+generated files, change an access pattern, trip the linter, run the tests)
+and chapters on concepts, project setup, the IDL, types, access patterns,
+lists, the Go API, schema changes, lint rules and limitations. From now on,
+every increment updates the sections it affects.
 
 ## 13. Roadmap
 

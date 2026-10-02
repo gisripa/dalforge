@@ -9,6 +9,7 @@
 //	DAL109  (warning) a list sorts by a field some update can change
 //	DAL114  (warning) a list's name says what it filters by
 //	DAL115  a nullable field sorts a list only as its range
+//	DAL119  role fields have the type the role needs, one field per role
 package check
 
 import (
@@ -30,6 +31,7 @@ const (
 	RuleMutableKey = "DAL109"
 	RuleListName   = "DAL114"
 	RuleNullSort   = "DAL115"
+	RuleRole       = "DAL119"
 )
 
 // Schema runs every core rule and returns the findings, sorted.
@@ -38,6 +40,7 @@ func Schema(s *ir.Schema) diag.List {
 	clean := map[*ir.Query]bool{} // queries without broken references
 	for _, e := range s.Entities {
 		shardKey(&l, e)
+		roles(&l, e)
 	}
 	for _, st := range s.Stores {
 		e := s.Entity(st.Entity)
@@ -278,7 +281,7 @@ func writeFields(l *diag.List, e *ir.Entity, q *ir.Query) {
 		case f.PrimaryKey:
 			l.Add(RuleWriteField, diag.Error, q.Pos, "rpc %s: %s.columns sets key field %q; keys identify the row and never change", q.Method, q.Spec.Kind(), name)
 		case f.Role != ir.RoleNone:
-			l.Add(RuleWriteField, diag.Error, q.Pos, "rpc %s: %s.columns sets %q, which the generated code manages (role %s)", q.Method, q.Spec.Kind(), name, f.Role)
+			l.Add(RuleWriteField, diag.Error, q.Pos, "rpc %s: %s.columns sets %q, which the generated code manages (%s)", q.Method, q.Spec.Kind(), name, roleName(f.Role))
 		}
 	}
 }
@@ -440,3 +443,40 @@ func compare(m *ir.Message, wants []want) []string {
 	slices.Sort(problems)
 	return problems
 }
+
+// roles checks that each role sits on a field the generated SQL can manage:
+// timestamps for the time roles, an optional one for soft delete (live rows
+// have no deletion time), a required integer for the version, never a key
+// field, and one field per role.
+func roles(l *diag.List, e *ir.Entity) {
+	seen := map[ir.Role]string{}
+	for _, f := range e.Fields {
+		if f.Role == ir.RoleNone {
+			continue
+		}
+		if prev, dup := seen[f.Role]; dup {
+			l.Add(RuleRole, diag.Error, f.Pos, "field %q: %s already has %s; an entity has at most one field per role", f.Name, prev, roleName(f.Role))
+			continue
+		}
+		seen[f.Role] = f.Name
+		var want string
+		switch {
+		case f.PrimaryKey:
+			want = "a non-key field (keys identify the row and never change)"
+		case f.Repeated:
+			want = "a single value, not a repeated field"
+		case f.Role == ir.RoleVersion && (f.Kind != ir.KindInt32 && f.Kind != ir.KindInt64 || f.Nullable):
+			want = "a required int64 (or int32): updates increment it"
+		case f.Role == ir.RoleDeleteTime && (f.Kind != ir.KindTimestamp || !f.Nullable):
+			want = "an optional google.protobuf.Timestamp: live rows have no deletion time, so it must be nullable"
+		case (f.Role == ir.RoleCreateTime || f.Role == ir.RoleUpdateTime) && f.Kind != ir.KindTimestamp:
+			want = "a google.protobuf.Timestamp"
+		default:
+			continue
+		}
+		l.Add(RuleRole, diag.Error, f.Pos, "field %q has %s, which needs %s", f.Name, roleName(f.Role), want)
+	}
+}
+
+// roleName spells a role as the IDL does, e.g. ROLE_VERSION.
+func roleName(r ir.Role) string { return "ROLE_" + strings.ToUpper(r.String()) }
