@@ -38,7 +38,7 @@ func PageSize(requested, def, limit int32) int32 {
 // tokenVersion is bumped if the envelope ever changes shape.
 const tokenVersion = 1
 
-// envelope is a page token before base64url encoding (design §6). Tokens are
+// envelope is a page token before base64url encoding (docs/design.md, "Pagination and page tokens"). Tokens are
 // not signed or encrypted: they carry the last row's sort keys, values the
 // client has already seen. The hashes bind a token to its query and filters,
 // for correctness, not security.

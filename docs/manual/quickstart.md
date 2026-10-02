@@ -71,9 +71,9 @@ outcome, and the run exits non-zero if anything is off. Pass `-seed N` to
 11. Delete is soft: lists and reads stop seeing the order
 12. A hand-written sqlc query (queries/custom/reports.sql)
 13. The indexes dalforge derived from the list rpcs (schema/schema.sql)
-   • CREATE INDEX orders_account_id_created_at_desc_id_desc_idx ON orders (account_id, created_at DESC, id DESC) WHERE deleted_at IS NULL
+   • CREATE INDEX orders_account_id_created_at_id_idx ON orders (account_id, created_at, id) WHERE deleted_at IS NULL
        serves ListOrdersByAccount
-   • CREATE INDEX orders_status_created_at_desc_id_desc_idx ON orders (status, created_at DESC, id DESC) WHERE deleted_at IS NULL
+   • CREATE INDEX orders_status_created_at_id_idx ON orders (status, created_at, id) WHERE deleted_at IS NULL
        serves ListOrdersByStatus, ListOrdersByStatusAndCreatedAt
    …
 All checks passed.
@@ -162,7 +162,7 @@ CREATE TABLE orders (
 );
 
 -- derived for: ListOrdersByStatus, ListOrdersByStatusAndCreatedAt
-CREATE INDEX orders_status_created_at_desc_id_desc_idx ON orders (status, created_at DESC, id DESC) WHERE deleted_at IS NULL;
+CREATE INDEX orders_status_created_at_id_idx ON orders (status, created_at, id) WHERE deleted_at IS NULL;
 ```
 
 ### The queries

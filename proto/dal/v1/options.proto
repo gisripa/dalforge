@@ -1,4 +1,4 @@
-// DRAFT: backend-neutral options that turn a protobuf file into a DALForge IDL.
+// Backend-neutral options that turn a protobuf file into a DALForge IDL.
 //
 // Messages annotated with (dal.v1.table) become entities (a Postgres table, a
 // DynamoDB table, ...); fields become columns/attributes. Services annotated
@@ -51,7 +51,7 @@ message Table {
   string name = 1;
 
   // Fields the data is sharded by. Recorded and validated (the fields must
-  // exist); routing and enforcement are out of scope for now.
+  // exist); dalforge doesn't route or enforce it.
   repeated string shard_key = 2;
 }
 

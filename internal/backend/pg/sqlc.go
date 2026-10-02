@@ -8,7 +8,8 @@ import (
 
 // emitSQLC renders sqlc.yaml. Every column gets a type override from its
 // GoType, so no pgtype wrapper reaches sqlc's models or parameters: the
-// generated API exposes no driver types (design §7). Written by hand rather
+// generated API exposes no driver types (docs/design.md, "No driver types in
+// the API"). Written by hand rather
 // than with a YAML library: the shape is fixed and the output must be stable.
 func emitSQLC(m *Schema, layout Layout) []byte {
 	var b strings.Builder

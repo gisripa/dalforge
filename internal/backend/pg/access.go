@@ -9,7 +9,8 @@ import (
 	"github.com/gisripa/dalforge/internal/ir"
 )
 
-// Rules for access paths and indexes (design §5).
+// Rules for access paths and indexes (docs/design.md, "Access paths and index
+// derivation").
 const (
 	RulePKFallback  = "DAL103" // warning: list falls back to a key that isn't time-ordered
 	RuleUniqueBy    = "DAL104" // get.by / upsert.conflict_on not backed by a unique constraint
@@ -112,6 +113,7 @@ func (b *builder) listPath(e *ir.Entity, t *Table, q *ir.Query, s *ir.List) (*Ac
 		}
 	}
 	idx.sorted = len(s.Eq) + len(s.OrderBy.Keys)
+	canonical(idx)
 	var preds []string
 	if soft := roleColumn(e, t, ir.RoleDeleteTime); soft != "" {
 		preds = append(preds, soft+" IS NULL")
@@ -123,8 +125,24 @@ func (b *builder) listPath(e *ir.Entity, t *Table, q *ir.Query, s *ir.List) (*Ac
 	return path, idx
 }
 
+// canonical stores a derived index in one direction: its first column after
+// the equality prefix ascending, the rest flipped along with it. B-trees scan
+// both ways, so the list is served either way, and lists sorting opposite
+// ways derive the identical index. Its shape and name then depend only on
+// the columns, not on which list was declared first, so adding or reordering
+// lists never renames an index that already exists.
+func canonical(idx *Index) {
+	if idx.eq >= len(idx.Columns) || !idx.Columns[idx.eq].Desc {
+		return
+	}
+	for i := idx.eq; i < len(idx.Columns); i++ {
+		idx.Columns[i].Desc = !idx.Columns[i].Desc
+	}
+}
+
 // inherit gives a list without order_by the sort of an explicit index whose
-// leading columns are exactly its eq fields (design §5, sort resolution 3).
+// leading columns are exactly its eq fields (docs/design.md, "Where the sort order
+// comes from").
 func (b *builder) inherit(t *Table, s *ir.List) {
 	eqCols := columnsOf(t, s.Eq)
 	for _, idx := range t.Indexes {

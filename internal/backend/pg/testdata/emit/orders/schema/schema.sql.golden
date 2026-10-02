@@ -14,4 +14,4 @@ CREATE TABLE orders (
 );
 
 -- derived for: ListByAccount
-CREATE INDEX orders_account_id_created_at_desc_id_desc_idx ON orders (account_id, created_at DESC, id DESC) WHERE deleted_at IS NULL;
+CREATE INDEX orders_account_id_created_at_id_idx ON orders (account_id, created_at, id) WHERE deleted_at IS NULL;

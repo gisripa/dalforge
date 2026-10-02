@@ -99,18 +99,16 @@
       ],
       "indexes": [
         {
-          "name": "orders_account_id_created_at_desc_id_desc_idx",
+          "name": "orders_account_id_created_at_id_idx",
           "columns": [
             {
               "column": "account_id"
             },
             {
-              "column": "created_at",
-              "desc": true
+              "column": "created_at"
             },
             {
-              "column": "id",
-              "desc": true
+              "column": "id"
             }
           ],
           "where": "deleted_at IS NULL",
@@ -143,7 +141,7 @@
           "desc": true
         }
       ],
-      "index": "orders_account_id_created_at_desc_id_desc_idx"
+      "index": "orders_account_id_created_at_id_idx"
     }
   }
 }

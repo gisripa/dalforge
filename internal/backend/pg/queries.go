@@ -176,7 +176,8 @@ func (qb queryBuilder) create(name string) (string, error) {
 			// Every insert parameter is nullable (a pointer in Go), so "unset"
 			// is representable: nil uses the column default when there is one,
 			// is NULL for an optional column, and is rejected by the DAL for a
-			// required column without a default (design §7).
+			// required column without a default (docs/design.md, "Insert
+			// parameters: every field is a pointer").
 			// The cast makes sqlc type the parameter from the cast rather than
 			// the column (whose override would drop the nullability); the
 			// nullable db_type overrides in sqlc.yaml then map it to a pointer.
@@ -266,7 +267,8 @@ func needsExists(st *ir.Store, e *ir.Entity) bool {
 	return hasVersion && hasUpdate
 }
 
-// list renders a keyset-paginated List as two queries (design §6): the
+// list renders a keyset-paginated List as two queries (docs/design.md,
+// "Pagination and page tokens"): the
 // first page, and the page after a cursor. Two fixed shapes, rather than one
 // query with "(@cursor IS NULL OR …)", keep every plan, including Postgres's
 // generic plans for prepared statements, able to use the index.
@@ -283,7 +285,8 @@ func (qb queryBuilder) list(name string, s *ir.List) (string, error) {
 		if c == nil {
 			return "", fmt.Errorf("field %q has no column", s.Range)
 		}
-		// Half-open, both bounds required (design §5).
+		// Half-open, both bounds required, so consecutive windows never
+		// overlap or leave gaps.
 		conds = append(conds,
 			fmt.Sprintf("%s >= sqlc.arg(%s_from)::%s", c.Name, s.Range, c.Type),
 			fmt.Sprintf("%s < sqlc.arg(%s_to)::%s", c.Name, s.Range, c.Type))

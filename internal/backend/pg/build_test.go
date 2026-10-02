@@ -88,6 +88,49 @@ func TestAccessPaths(t *testing.T) {
 	golden.Assert(t, "paths", []byte(b.String()))
 }
 
+// TestDerivedIndexesIgnoreDeclarationOrder: the derived indexes, their
+// names and directions included, depend only on the set of lists, never on
+// the order the rpcs are declared in. Otherwise adding or moving an rpc could
+// rename an index that's already deployed.
+func TestDerivedIndexesIgnoreDeclarationOrder(t *testing.T) {
+	indexes := func(file, importPath string, reverse bool) string {
+		res, err := idl.Load(context.Background(), []string{file}, idl.Options{ImportPaths: []string{importPath}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reverse {
+			for _, st := range res.Schema.Stores {
+				slices.Reverse(st.Queries)
+			}
+		}
+		model, _ := Build(res.Schema, res.PG, Target{Major: 16})
+		var out []string
+		for _, tb := range model.Tables {
+			for _, idx := range tb.Indexes {
+				out = append(out, createIndex(tb, idx))
+			}
+		}
+		slices.Sort(out)
+		return strings.Join(out, "\n")
+	}
+	for _, tt := range []struct{ file, importPath string }{
+		{"paths.proto", "testdata"},
+		{"defaults/v1/defaults.proto", "../../idl/testdata"},
+		{"orders/v1/orders.proto", "../../idl/testdata"},
+		{"dal206.proto", "testdata"},
+	} {
+		t.Run(tt.file, func(t *testing.T) {
+			forward, backward := indexes(tt.file, tt.importPath, false), indexes(tt.file, tt.importPath, true)
+			if forward != backward {
+				t.Errorf("indexes depend on rpc order:\ndeclared order:\n%s\nreversed:\n%s", forward, backward)
+			}
+			if forward == "" {
+				t.Error("no indexes derived; the fixture changed?")
+			}
+		})
+	}
+}
+
 func TestTargetBelowFloor(t *testing.T) {
 	_, diags := build(t, "../../idl/testdata", "shop/v1/stores.proto", Target{Major: 15})
 	if len(diags) != 1 || diags[0].Rule != RuleVersion || !strings.Contains(diags[0].Message, "older than the oldest supported") {

@@ -129,17 +129,17 @@
           ]
         },
         {
-          "name": "item_tenant_id_created_at_desc_id_idx",
+          "name": "item_tenant_id_created_at_id_desc_idx",
           "columns": [
             {
               "column": "tenant_id"
             },
             {
-              "column": "created_at",
-              "desc": true
+              "column": "created_at"
             },
             {
-              "column": "id"
+              "column": "id",
+              "desc": true
             }
           ],
           "where": "deleted_at IS NULL",
@@ -197,7 +197,7 @@
         }
       ],
       "mixed": true,
-      "index": "item_tenant_id_created_at_desc_id_idx"
+      "index": "item_tenant_id_created_at_id_desc_idx"
     }
   }
 }

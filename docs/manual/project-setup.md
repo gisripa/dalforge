@@ -121,7 +121,8 @@ there are errors. Otherwise it:
 **`dalforge lock`** reports whether `dalforge.lock` matches the running
 toolchain. `-upgrade` rewrites the lock to match.
 
-`dalforge migrate` is reserved for generated migrations, the next phase. See
+`dalforge migrate` is reserved for generated migrations, which aren't
+available yet. See
 [Changing the schema](schema-changes.md).
 
 ## `dalforge.lock`

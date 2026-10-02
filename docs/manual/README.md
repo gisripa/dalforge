@@ -29,11 +29,15 @@ example shop end to end and shows everything dalforge generates.
 
 ## Status
 
-This manual describes dalforge as of the MVP: CRUD by key, lists with derived
-indexes and keyset pagination, upsert, transactions, and the lint rules.
-Generated migrations (snapshot, diff, migration files) are the next phase.
-Until then, [Changing the schema](schema-changes.md) explains the rules
-dalforge will enforce, and how to stay within them by hand.
+This manual describes dalforge v0: CRUD by key, lists with derived indexes
+and keyset pagination, upsert, transactions, and the lint rules.
+
+> **Schema changes aren't checked yet.** Generated migrations, and the lint
+> rules that catch unsafe schema changes, need dalforge to know what has
+> already shipped, which it doesn't track yet. Until it does, write migrations by
+> hand following [Changing the schema](schema-changes.md). In particular,
+> never drop a removed field's column, and never let a schema-diff tool do it
+> for you: the release still running during a deploy uses it.
 
 For the reasons behind the design, see the [design doc](../design.md).
 

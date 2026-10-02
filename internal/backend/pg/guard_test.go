@@ -11,7 +11,8 @@ import (
 	"testing"
 )
 
-// TestGeneratedImports guards design §7's rules on every generated DAL
+// TestGeneratedImports guards the no-driver-types rule (docs/design.md, "No
+// driver types in the API") on every generated DAL
 // package (the emit goldens): the API file (dal.go) never imports a driver
 // package, and no generated Go imports protobuf or dalforge internals.
 func TestGeneratedImports(t *testing.T) {

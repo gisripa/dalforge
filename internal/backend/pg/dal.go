@@ -81,7 +81,11 @@ func emitDAL(s *ir.Schema, m *Schema, layout Layout) (map[string][]byte, diag.Li
 			if e == nil || t == nil {
 				continue
 			}
-			ms := methods(st, e, t, m.Paths)
+			ms, err := methods(st, e, t, m.Paths)
+			if err != nil {
+				diags.Add(_ruleInternal, diag.Error, st.Pos, "store %s: %v (Emit needs a model Build reported no errors for)", st.FullName, err)
+				continue
+			}
 			api.store(st, ms, layout.Package)
 			impl.repository(st, e, t, ms, layout.Package)
 		}
@@ -160,7 +164,6 @@ type method struct {
 	model   string
 	noModel bool   // returns only error (Delete without an entity response)
 	execRow bool   // sqlc :execrows (Delete without an entity response)
-	pending bool   // kind not generated yet (List, Upsert: phase 2)
 	nilDoc  string // Create/Update/Upsert: what nil means per written field
 	path    *AccessPath
 	list    *ir.List // List: the spec
@@ -183,7 +186,7 @@ type param struct {
 
 // methods builds the method descriptions of a store, mirroring the SQL
 // emitter's parameters so the signatures match sqlc's.
-func methods(st *ir.Store, e *ir.Entity, t *Table, paths map[string]*AccessPath) []method {
+func methods(st *ir.Store, e *ir.Entity, t *Table, paths map[string]*AccessPath) ([]method, error) {
 	short := storeShort(st)
 	var out []method
 	for _, q := range st.Queries {
@@ -226,7 +229,7 @@ func methods(st *ir.Store, e *ir.Entity, t *Table, paths map[string]*AccessPath)
 			m.read, m.strong = true, s.Consistency == ir.ConsistencyStrong
 			m.list, m.path = s, paths[storeShortName(st)+"."+q.Method]
 			if m.path == nil {
-				m.pending = true
+				return nil, fmt.Errorf("rpc %s has no access path", q.Method)
 			}
 			m.alias = m.sqlc + "Params" // dalforge-owned (not a sqlc alias)
 			out = append(out, m)
@@ -240,9 +243,7 @@ func methods(st *ir.Store, e *ir.Entity, t *Table, paths map[string]*AccessPath)
 				}
 			}
 		default:
-			m.pending = true
-			out = append(out, m)
-			continue
+			return nil, fmt.Errorf("rpc %s: no DAL method for %s queries", q.Method, q.Spec.Kind())
 		}
 		m.inline = len(m.params) == 1
 		if !m.inline {
@@ -250,7 +251,7 @@ func methods(st *ir.Store, e *ir.Entity, t *Table, paths map[string]*AccessPath)
 		}
 		out = append(out, m)
 	}
-	return out
+	return out, nil
 }
 
 func storeShort(st *ir.Store) string {
@@ -309,9 +310,7 @@ func (g *goFile) store(st *ir.Store, ms []method, sqlcPkg string) {
 	var reads, writes []string
 	for _, m := range ms {
 		var line string
-		if m.pending {
-			line = fmt.Sprintf("\t// %s (%s) arrives in phase 2.\n", m.rpc, m.q.Spec.Kind())
-		} else if m.list != nil {
+		if m.list != nil {
 			g.listParams(m, short)
 			line = fmt.Sprintf("\t// %s implements %s.%s (%s).\n\t%s%s\n", m.rpc, st.FullName, m.rpc, m.q.Spec.Kind(), m.rpc, g.signature(m))
 		} else {

@@ -68,7 +68,8 @@ func Schema(s *ir.Schema) diag.List {
 	return l
 }
 
-// lists checks one List's access path (design §5).
+// lists checks one List's access path (docs/design.md, "Access paths and
+// index derivation").
 func lists(l *diag.List, e *ir.Entity, q *ir.Query, s *ir.List) {
 	// A B-tree serves one range, after the equality prefix, on the leading
 	// sort column; ranging on X while sorting on Y can't use one index.

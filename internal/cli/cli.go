@@ -21,7 +21,8 @@ const (
 	ExitUsage = 2
 )
 
-// ErrNotImplemented is returned by subcommands that are not built yet.
+// ErrNotImplemented is returned by subcommands that are declared in the CLI but
+// have no implementation in this build.
 var ErrNotImplemented = errors.New("not implemented")
 
 type command struct {

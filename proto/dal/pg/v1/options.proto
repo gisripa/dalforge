@@ -1,4 +1,4 @@
-// DRAFT: Postgres backend options. These refine the physical schema only; the
+// Postgres backend options. These refine the physical schema only; the
 // entity and its access patterns are declared with dal.v1 and stay
 // backend-neutral. Every option here is optional.
 //
@@ -85,7 +85,7 @@ message Column {
     // A first-class Postgres type. Only types that fit the field's proto type
     // are allowed (DAL209), since the Go type follows the proto type.
     Type type = 1;
-    // Raw type for anything Type does not cover yet (extension types such as
+    // Raw type for anything Type doesn't cover (extension types such as
     // vector(1536), or parameterised types such as numeric(12,2)).
     string custom_type = 2;
   }

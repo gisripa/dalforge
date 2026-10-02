@@ -29,7 +29,7 @@ func (k OpKind) String() string {
 }
 
 // Op describes a repository operation. Generated code fills it at generation
-// time, including whether retrying the operation is idempotent (design §7).
+// time, including whether retrying the operation is idempotent (docs/design.md, "Errors and retries").
 type Op struct {
 	Entity     string // e.g. "Order"
 	Method     string // e.g. "ListByAccount"

@@ -319,8 +319,8 @@ func printDerivedIndexes(s *steps) error {
 }
 
 // freshDatabase recreates the demo database and applies the generated
-// schema. (A real project applies migrations; dalforge generates those in
-// phase 3.)
+// schema. A real project applies migrations to an existing database instead
+// (docs/manual/schema-changes.md).
 func freshDatabase(ctx context.Context, url string) (*pgxpool.Pool, error) {
 	admin, err := pgx.Connect(ctx, url)
 	if err != nil {

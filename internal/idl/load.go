@@ -407,7 +407,9 @@ func (l *loader) list(md protoreflect.MethodDescriptor, list *dalv1.List, e *ir.
 		}
 		s.OrderBy = ir.Sort{Keys: cols, Source: ir.SourceDeclared}
 	case s.Range != "":
-		// A range implies sorting by the range field (design §5).
+		// A range implies sorting by the range field: one index can range over
+		// a column and return rows in its order, never range over one and sort
+		// by another.
 		s.OrderBy = ir.Sort{Keys: []ir.SortKey{{Field: s.Range}}, Source: ir.SourceDefaulted}
 	default:
 		// No order_by and no range: the primary key, minus fields the

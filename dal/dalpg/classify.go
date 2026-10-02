@@ -37,7 +37,7 @@ const (
 // RDS Proxy error code. It receives Classify's result as base.
 type Classifier func(err error, base dal.Retryability) dal.Retryability
 
-// Classify is the default SQLSTATE classification (design §7):
+// Classify is the default SQLSTATE classification (docs/design.md, "Errors and retries"):
 //
 //	request never reached the server (pgconn.SafeToRetry)   Retryable
 //	40001 serialization failure, 40P01 deadlock               Retryable (rolled back)

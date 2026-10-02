@@ -22,7 +22,7 @@ const DefaultFile = "dalforge.yaml"
 type Config struct {
 	Version int    `yaml:"version"`
 	Module  string `yaml:"module"`  // Go module path of the project, e.g. github.com/acme/shop
-	Backend string `yaml:"backend"` // only "pg" for now
+	Backend string `yaml:"backend"` // "pg", the only supported backend
 	Proto   Proto  `yaml:"proto"`
 	PG      PG     `yaml:"pg"`
 	Out     Out    `yaml:"out"`

@@ -35,6 +35,18 @@ Generated code and the runtime are released in lockstep: users run dalforge
    mise exec github:gisripa/dalforge@0.1.0 -- dalforge version
    ```
 
+## Release notes
+
+Until generated migrations land, every release's notes carry this caveat:
+
+> Schema changes aren't checked yet: dalforge generates the schema for a new
+> database but doesn't know what's deployed. Write migrations by hand, keep
+> changes additive, and never drop a removed field's column during a rolling
+> deploy. See docs/manual/schema-changes.md.
+
+Also call out any change to the IDL, the generated API or the runtime: v0
+minor versions may break them.
+
 ## Before the first release
 
 - The repository must be public, or users need `GOPRIVATE` and a token for

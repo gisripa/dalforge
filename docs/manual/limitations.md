@@ -24,7 +24,7 @@ setup and type overrides.
 | Enum constants and validation in Go | enums are stored as `text` and typed `string` | your own constants, or the protobuf-generated enum's `String()` |
 | Choosing a transaction's isolation level per call | `WithTx` uses the connection's default (`READ COMMITTED`) | a separate writer pool whose connections default to another level: `cfg.ConnConfig.RuntimeParams["default_transaction_isolation"] = "serializable"`. Serialization failures are retried |
 | Dropping retired columns, tables and indexes | not additive | a hand-written migration, once no deployed release uses them |
-| Generated migrations | the next phase | hand-written migrations ([Changing the schema](schema-changes.md)) |
+| Generated migrations | planned | hand-written migrations ([Changing the schema](schema-changes.md)) |
 | Backends other than Postgres | Postgres 16+ (Aurora PostgreSQL) only | |
 | Drivers other than pgx v5 | | |
 
@@ -40,7 +40,7 @@ setup and type overrides.
   its output files after the query file, so `queries/custom/accounts.sql` and
   the generated `accounts.sql` both end up in `gen/sqlcdb/accounts.sql.go`.
   That's harmless, but prefer distinct custom file names for clarity.
-- **Index names spell out their columns,** so when lists change, an index can
-  get a new name and direction even though its purpose didn't change. That's
-  harmless for a fresh database, but a migration would recreate the index.
-  Stable index identity is part of the migrations phase.
+- **A new list can absorb an existing index.** If a new list's index starts
+  with all the columns of an existing one, the longer index replaces the
+  shorter: `schema.sql` drops the old index and adds the new. Create the new
+  index first, and drop the old one in a later release.

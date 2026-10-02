@@ -33,7 +33,8 @@ type Schema struct {
 	Paths map[string]*AccessPath `json:"paths,omitempty"`
 }
 
-// AccessPath is how one List query reads its table (design §5).
+// AccessPath is how one List query reads its table (docs/design.md, "Access
+// paths and index derivation").
 type AccessPath struct {
 	Eq    []string     `json:"eq,omitempty"`    // equality fields
 	Range string       `json:"range,omitempty"` // range field

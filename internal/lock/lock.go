@@ -1,6 +1,6 @@
 // Package lock reads and writes dalforge.lock, which pins the toolchain that
 // produced a project's generated code: the dalforge version, hashes of the
-// bundled options, and the sqlc version (design §2). It is committed, like a
+// bundled options, and the sqlc version (docs/design.md, "Architecture"). It is committed, like a
 // go.sum, so a teammate or CI with a different toolchain notices instead of
 // silently regenerating different code.
 //

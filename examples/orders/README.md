@@ -47,9 +47,9 @@ key (Equality, Sort, Range), and merges the ones that can share:
 
 | rpc | filters | derived index |
 |---|---|---|
-| `ListOrdersByAccount` | `account_id`, newest first | `(account_id, created_at DESC, id DESC)` |
-| `ListOrdersByStatus` | `status`, newest first | `(status, created_at DESC, id DESC)` |
-| `ListOrdersByStatusAndCreatedAt` | `status`, `created_at` window | shares the one above, scanned backwards |
+| `ListOrdersByAccount` | `account_id`, newest first | `(account_id, created_at, id)`, read backwards |
+| `ListOrdersByStatus` | `status`, newest first | `(status, created_at, id)`, read backwards |
+| `ListOrdersByStatusAndCreatedAt` | `status`, `created_at` window | shares the one above |
 | `ListOrdersByAccountAndStatusAndCreatedAt` | `account_id`, `status`, window | `(account_id, status, created_at, id)` |
 
 All are partial (`WHERE deleted_at IS NULL`). See `schema/schema.sql` after

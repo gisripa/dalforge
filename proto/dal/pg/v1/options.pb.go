@@ -1,4 +1,4 @@
-// DRAFT: Postgres backend options. These refine the physical schema only; the
+// Postgres backend options. These refine the physical schema only; the
 // entity and its access patterns are declared with dal.v1 and stay
 // backend-neutral. Every option here is optional.
 //
@@ -428,7 +428,7 @@ type Column_Type struct {
 }
 
 type Column_CustomType struct {
-	// Raw type for anything Type does not cover yet (extension types such as
+	// Raw type for anything Type doesn't cover (extension types such as
 	// vector(1536), or parameterised types such as numeric(12,2)).
 	CustomType string `protobuf:"bytes,2,opt,name=custom_type,json=customType,proto3,oneof"`
 }

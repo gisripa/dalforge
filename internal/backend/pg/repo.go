@@ -23,21 +23,16 @@ func (g *goFile) repository(st *ir.Store, e *ir.Entity, t *Table, ms []method, s
 	fmt.Fprintf(&g.body, "// composition root (dalpg.New) and share it; it holds the pools and retry policy.\n")
 	fmt.Fprintf(&g.body, "func New%sRepository(run *dalpg.Runner) %sRepository {\n\treturn &%s{run: run}\n}\n\n", short, short, recv)
 
-	// One dal.Op per rpc, fixed at generation time (design §7).
+	// One dal.Op per rpc, fixed at generation time: retry policies read its
+	// Idempotent flag, and tracers its name (docs/design.md, "Errors and retries").
 	g.body.WriteString("var (\n")
 	for _, m := range ms {
-		if m.pending {
-			continue
-		}
 		fmt.Fprintf(&g.body, "\t%s = dal.Op{Entity: %q, Method: %q, Kind: dal.%s, Idempotent: %t}\n",
 			opVar(short, m), modelName(t), m.rpc, opKind(m.q), idempotent(m.q, e))
 	}
 	g.body.WriteString(")\n\n")
 
 	for _, m := range ms {
-		if m.pending {
-			continue
-		}
 		fmt.Fprintf(&g.body, "// %s implements %s.%s.\n", m.rpc, st.FullName, m.rpc)
 		fmt.Fprintf(&g.body, "func (r *%s) %s%s {\n", recv, m.rpc, g.signature(m))
 		switch s := m.q.Spec.(type) {
@@ -177,7 +172,7 @@ func opKind(q *ir.Query) string {
 	return "OpGet"
 }
 
-// idempotent follows design §7: reads, deletes and upserts are; Create isn't;
+// idempotent follows docs/design.md, "Errors and retries": reads, deletes and upserts are; Create isn't;
 // Update is unless it is a compare-and-swap (a retry after an ambiguous
 // success would report the caller's own write as a conflict).
 func idempotent(q *ir.Query, e *ir.Entity) bool {

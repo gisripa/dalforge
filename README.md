@@ -16,9 +16,18 @@ are rejected by a linter that explains why.
 - **Use it:** [the manual](docs/manual/README.md).
 - **Why it's built this way:** [the design doc](docs/design.md).
 
-Status: CRUD by key, lists with derived indexes and page tokens, upsert,
-transactions and the lint rules work end to end on Postgres 16. Generated
-migrations are next.
+Status: **v0, early adopters.** CRUD by key, lists with derived indexes and
+page tokens, upsert, transactions and the lint rules work end to end on
+Postgres 16. The IDL, the generated API and the runtime may still change
+between minor versions.
+
+> **Schema changes aren't checked yet.** dalforge generates the full schema
+> for a new database, but it doesn't yet know what you've already deployed,
+> so it can't generate migrations or catch an unsafe change (retyping a
+> field, a new required field without a default, reusing a field number).
+> Until it does, write migrations by hand, keep every change additive, and
+> never drop a removed field's column during a rolling deploy. See
+> [Changing the schema](docs/manual/schema-changes.md).
 
 ## Install
 

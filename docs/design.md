@@ -584,7 +584,8 @@ For Postgres, an access path becomes the B-tree index `(eq..., sort..., pk...)`:
 ```
 list: {eq: ["account_id"] order_by: ["created_at DESC"]}
   → CREATE INDEX orders_account_id_created_at_id_idx
-      ON orders (account_id, created_at DESC, id DESC) WHERE deleted_at IS NULL;
+      ON orders (account_id, created_at, id) WHERE deleted_at IS NULL;
+    (stored ascending; the newest-first list reads it backwards)
 ```
 
 ### Where the sort order comes from
@@ -624,8 +625,16 @@ otherwise it's lint error `DAL104`. A non-unique lookup is a List.
 - **Derived index shape:** `(eq…, sort…, key tie-breakers)`, partial on
   `deleted_at IS NULL` for soft-delete tables, plus `range IS NOT NULL` for a
   nullable range column. The name spells out the columns and directions
-  (`orders_status_created_at_desc_id_desc_idx`), and `schema.sql` notes the
-  rpcs each derived index serves (`-- derived for: …`).
+  (`orders_status_created_at_id_idx`), and `schema.sql` notes the rpcs each
+  derived index serves (`-- derived for: …`).
+- **Canonical direction (decided 2026-10-02):** a derived index is stored with
+  its first sort column ascending (the rest flipped with it); B-trees scan
+  both ways. Lists sorting opposite ways then derive the identical index, so
+  an index's shape and name depend only on its columns, never on rpc
+  declaration order: adding or reordering other lists can't rename a
+  deployed index. Pinned by `TestDerivedIndexesIgnoreDeclarationOrder`. The
+  only remaining identity change is legitimate: a new, longer index
+  absorbing a shorter one.
 - **Prefix merging:** a derived index is dropped when another index (the
   primary key, an explicit index, or a longer derived one) starts with the
   same columns in the same directions or all reversed. B-trees scan both
@@ -633,7 +642,7 @@ otherwise it's lint error `DAL104`. A non-unique lookup is a List.
   `ListOrdersByStatusAndCreatedAt` (`created_at` ascending) share one index.
   The direction of equality columns never matters. A predicate must match, or
   the covering index must have none. A List on `account_id` sorted by `id`
-  is not served by `(account_id, created_at DESC, id DESC)`: it needs
+  is not served by `(account_id, created_at, id)`: it needs
   `(account_id, id)`.
 - **Equality order (planned):** reordering equality columns to maximise
   sharing, since their order inside the equality prefix doesn't affect

@@ -74,9 +74,9 @@ The example's ladder, from broad to narrow:
 
 | rpc | `eq` | `range` / `order_by` | Index |
 |---|---|---|---|
-| `ListOrdersByAccount` | account_id | `created_at DESC` | `(account_id, created_at DESC, id DESC)` |
-| `ListOrdersByStatus` | status | `created_at DESC` | `(status, created_at DESC, id DESC)` |
-| `ListOrdersByStatusAndCreatedAt` | status | range `created_at` | shares the one above, scanned backwards |
+| `ListOrdersByAccount` | account_id | `created_at DESC` | `(account_id, created_at, id)`, read backwards |
+| `ListOrdersByStatus` | status | `created_at DESC` | `(status, created_at, id)`, read backwards |
+| `ListOrdersByStatusAndCreatedAt` | status | range `created_at` | shares the one above, read forwards |
 | `ListOrdersByAccountAndStatusAndCreatedAt` | account_id, status | range `created_at` | `(account_id, status, created_at, id)` |
 
 ### Ranges
@@ -129,8 +129,14 @@ You don't declare indexes for lists. dalforge derives them and writes them to
 
 ```sql
 -- derived for: ListOrdersByStatus, ListOrdersByStatusAndCreatedAt
-CREATE INDEX orders_status_created_at_desc_id_desc_idx ON orders (status, created_at DESC, id DESC) WHERE deleted_at IS NULL;
+CREATE INDEX orders_status_created_at_id_idx ON orders (status, created_at, id) WHERE deleted_at IS NULL;
 ```
+
+- **One direction:** a derived index is stored with its first sort column
+  ascending, and B-trees scan both ways, so it serves a newest-first list
+  as well as an oldest-first one. This keeps every index's shape and name a
+  function of its columns alone: adding, removing or reordering *other*
+  lists never renames or rebuilds an index you've already deployed.
 
 - **Partial on live rows:** on soft-delete tables, indexes cover only rows
   with `deleted_at IS NULL`, the only rows lists return. For a nullable range

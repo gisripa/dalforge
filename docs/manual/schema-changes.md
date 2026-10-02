@@ -1,11 +1,11 @@
 # Changing the schema
 
-> **Status:** generated migrations (`dalforge migrate`, a schema snapshot, and
-> the DAL3xx rules that check changes against it) are the next phase. Today,
-> `dalforge generate` writes the full `schema/schema.sql` for a fresh database,
-> and you write migrations by hand. This chapter describes the rules dalforge
-> will enforce, so that what you do by hand now matches what it will check
-> later.
+> **Status:** dalforge doesn't generate migrations yet. `dalforge generate`
+> writes the full `schema/schema.sql` for a new database, and you write
+> migrations by hand. This chapter describes the rules that keep schema
+> changes safe during a rolling deploy; generated migrations (a schema
+> snapshot, `dalforge migrate`, and the DAL3xx rules) will check the same
+> rules.
 
 ## The contract: every change is additive
 
@@ -50,7 +50,7 @@ release. Until then, a retired index still costs writes.
 
 **Never reuse a field number.** The number is the column's identity: reusing
 one, or reviving a reserved one, is how a "new" field silently reads an old
-column's data. Phase 3 enforces this with DAL111–113.
+column's data. The planned rules DAL111–113 will enforce this.
 
 ## Changing a type or a name
 
@@ -64,10 +64,19 @@ A type change or a rename is done as additive steps, spread over releases:
 
 ## Writing migrations by hand today
 
-Until phase 3, use any migration tool; phase 3 will emit
+Use any migration tool; generated migrations will be
 [golang-migrate](https://github.com/golang-migrate/migrate) files. Compare the
 new `schema/schema.sql` with the previous one (generated files are
-deterministic, so `diff` works), and write the matching statements:
+deterministic, so `diff` works), and write the matching statements.
+
+**If you use a schema-diff tool** (Atlas, migra, pg-schema-diff) against
+`schema.sql`, review what it proposes. It doesn't know the additive contract:
+for a removed field, it will propose `DROP COLUMN`, and it creates indexes
+without `CONCURRENTLY` unless told to. Replace drops with the
+[retire step](#removing-things-retire-never-drop), and make index creation
+concurrent.
+
+When writing them:
 
 - Create derived indexes with `CREATE INDEX CONCURRENTLY`, so writes aren't
   blocked, and in a migration of their own: `CONCURRENTLY` can't run inside a
@@ -75,11 +84,12 @@ deterministic, so `diff` works), and write the matching statements:
 - Start other migrations with `SET lock_timeout = '5s';`, so a migration
   stuck behind a long query fails fast instead of queueing every write behind
   it.
-- An index whose name changed in `schema.sql` (index names spell out their
-  columns) is a new index plus a retired one. Create the new one; drop the
-  old one later.
+- An index that disappeared from `schema.sql` because a new, longer index
+  now serves its lists is retired, not dropped: create the new one, and drop
+  the old one in a later release. Derived index names only ever change when
+  the index's columns do, so a renamed index really is a different index.
 
-## What phase 3 adds
+## Planned: generated migrations
 
 - `dalforge.snapshot.json`, committed next to the IDL, recording what has
   shipped: tables, columns keyed by field number, indexes, and what's retired.

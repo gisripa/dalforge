@@ -23,7 +23,7 @@ Table configures the entity backing a message.
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` | Table name. Defaults to the snake_case message name (HTTPRequestLog becomes http_request_log). It must be a valid unquoted identifier (DAL204); a default that's a reserved word, such as order or user, needs an explicit name. |
-| `shard_key` | repeated `string` | Fields the data is sharded by. Recorded and validated (the fields must exist); routing and enforcement are out of scope for now. |
+| `shard_key` | repeated `string` | Fields the data is sharded by. Recorded and validated (the fields must exist); dalforge doesn't route or enforce it. |
 
 ### dal.v1.Field
 
@@ -191,7 +191,7 @@ Column refines the Postgres column.
 | Field | Type | Description |
 |---|---|---|
 | `type` | [Type](#dalpgv1type) | One of `pg_type`. A first-class Postgres type. Only types that fit the field's proto type are allowed (DAL209), since the Go type follows the proto type. |
-| `custom_type` | `string` | One of `pg_type`. Raw type for anything Type does not cover yet (extension types such as vector(1536), or parameterised types such as numeric(12,2)). |
+| `custom_type` | `string` | One of `pg_type`. Raw type for anything Type doesn't cover (extension types such as vector(1536), or parameterised types such as numeric(12,2)). |
 | `default` | `string` | Column default as a SQL expression, e.g. "now()" or "'pending'". |
 | `go_type` | `string` | Go type for a custom_type column, as "import/path.Type", e.g. "github.com/pgvector/pgvector-go.Vector". It's passed to sqlc as a type override and becomes the model field's type. Required with custom_type. |
 
