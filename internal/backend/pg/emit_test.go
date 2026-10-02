@@ -10,6 +10,7 @@ import (
 	"github.com/gisripa/dalforge/internal/check"
 	"github.com/gisripa/dalforge/internal/golden"
 	"github.com/gisripa/dalforge/internal/idl"
+	"github.com/gisripa/dalforge/internal/ir"
 )
 
 // TestEmitGolden pins the full SQL-side output (schema, query files,
@@ -33,7 +34,7 @@ func TestEmitGolden(t *testing.T) {
 			if d.HasErrors() {
 				t.Fatalf("pg findings:\n%s", d)
 			}
-			files, d := Emit(res.Schema, model, Layout{})
+			files, d := Emit(res.Schema, model, _fixtureLayout)
 			if len(d) > 0 {
 				t.Fatalf("emit findings:\n%s", d)
 			}
@@ -67,7 +68,7 @@ service ABStore { option (dal.v1.store) = {entity: "A"};
 		t.Fatal(err)
 	}
 	model, _ := Build(res.Schema, res.PG, Target{})
-	_, d := Emit(res.Schema, model, Layout{})
+	_, d := Emit(res.Schema, model, _fixtureLayout)
 	got := d.String()
 	for _, want := range []string{"both generate the sqlc query OrderGet", "both generate the sqlc query ABGet"} {
 		if !strings.Contains(got, want) {
@@ -104,5 +105,44 @@ func TestParamTypeConflict(t *testing.T) {
 	_, conflicts := nullableTypes(m)
 	if len(conflicts) != 1 || !strings.Contains(conflicts[0], "t.b: SQL type numeric maps to *decimal.Decimal here but *string elsewhere") {
 		t.Errorf("conflicts = %q, want one about t.b", conflicts)
+	}
+}
+
+func TestNaming(t *testing.T) {
+	tests := []struct {
+		fn       func(string) string
+		in, want string
+	}{
+		{fn: camel, in: "http_request_log", want: "HTTPRequestLog"},
+		{fn: camel, in: "account_id", want: "AccountID"},
+		{fn: camel, in: "orders", want: "Orders"},
+		{fn: goIdent, in: "account_id", want: "accountID"},
+		{fn: goIdent, in: "id", want: "id"},
+		{fn: goIdent, in: "tenant_id", want: "tenantID"},
+		{fn: goIdent, in: "id_value", want: "idValue"},
+		{fn: goIdent, in: "sku", want: "sku"},
+		{fn: dalPackageName, in: "orders.v1", want: "ordersdal"},
+		{fn: dalPackageName, in: "acme.billing.v2beta1", want: "billingdal"},
+		{fn: dalPackageName, in: "shop", want: "shopdal"},
+		{fn: pkgName, in: "github.com/pgvector/pgvector-go", want: "pgvector_go"},
+		{fn: pkgName, in: "encoding/json", want: "json"},
+	}
+	for _, tt := range tests {
+		if got := tt.fn(tt.in); got != tt.want {
+			t.Errorf("%q → %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestRenameConflict(t *testing.T) {
+	m := &Schema{Tables: []*Table{
+		{Name: "orders", Entity: "x.Order", Columns: []*Column{{Name: "id"}}},
+		{Name: "lines", Entity: "x.Line", Columns: []*Column{{Name: "orders"}}},
+		{Name: "line_item", Entity: "x.LineItem", Columns: []*Column{{Name: "id"}}}, // no rename needed
+	}}
+	got := renameConflicts(&ir.Schema{}, m)
+	// lines → Line is renamed too, but no column is called "lines".
+	if len(got) != 1 || !strings.Contains(got[0].msg, `table "orders" must be renamed to Order`) {
+		t.Errorf("conflicts = %+v, want one: orders vs column lines.orders", got)
 	}
 }

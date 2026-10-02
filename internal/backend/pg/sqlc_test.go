@@ -27,6 +27,10 @@ func sqlcBinary(t *testing.T) string {
 	return bin
 }
 
+// _fixtureLayout matches the module the integration test compiles the output
+// in, so the DAL packages' imports of sqlc's output resolve.
+var _fixtureLayout = Layout{Module: "example.com/dalforgefixture"}
+
 var _fixtures = []struct{ name, file string }{
 	{name: "orders", file: "orders/v1/orders.proto"},
 	{name: "types", file: "types/v1/types.proto"},
@@ -49,7 +53,7 @@ func generate(t *testing.T, bin, file string) string {
 	if d.HasErrors() {
 		t.Fatalf("pg findings:\n%s", d)
 	}
-	files, d := Emit(res.Schema, model, Layout{})
+	files, d := Emit(res.Schema, model, _fixtureLayout)
 	if d.HasErrors() {
 		t.Fatalf("emit findings:\n%s", d)
 	}

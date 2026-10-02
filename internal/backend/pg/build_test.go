@@ -106,7 +106,7 @@ func TestGoType(t *testing.T) {
 		wantImp string
 	}{
 		{in: "string", want: "string"},
-		{in: "github.com/pgvector/pgvector-go.Vector", want: "pgvector-go.Vector", wantImp: "github.com/pgvector/pgvector-go"},
+		{in: "github.com/pgvector/pgvector-go.Vector", want: "pgvector_go.Vector", wantImp: "github.com/pgvector/pgvector-go"},
 		{in: "net/netip.Prefix", want: "netip.Prefix", wantImp: "net/netip"},
 		{in: "not a type"},
 		{in: "pkg."},

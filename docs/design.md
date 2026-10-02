@@ -622,6 +622,7 @@ Postgres:
 | DAL204 | error | a table, column or index name isn't a valid unquoted identifier: lowercase letters, digits and `_`, starting with a letter or `_`. Also flagged: longer than 63 bytes (Postgres silently truncates), or a reserved SQL keyword. dalforge never quotes identifiers, so names must also work in custom queries |
 | DAL205 | error | two rpcs generate the same sqlc query name (`<Store minus "Store"><Method>`, e.g. stores `Order` and `OrderStore` both give `OrderGet`), or a generated name collides with a custom sqlc query |
 | DAL213 | error | two columns of the same SQL type need different Go types (e.g. `numeric` as `string` and as `decimal.Decimal`). sqlc's nullable insert-parameter overrides are per type, so give them the same `go_type` |
+| DAL214 | error | a table needs a sqlc rename (its name differs from the message name) but some column has the same name; sqlc's global rename would rename that column's field too |
 | DAL206 | info | two List rpcs share an equality prefix but sort differently; aligning `order_by` would let them share one index |
 | DAL207 | error | the deploy target (`dalforge.yaml` `pg.version`) is older than `min_version`, or a type/feature in use needs a newer version |
 | DAL208 | error | a `custom_type` has no (or an invalid) `go_type`, a `go_type` is set without `custom_type`, or a known extension type (`vector`, `geometry`, `citext`, …) is used without declaring its extension in the file's `(dal.pg.v1.file).extensions` |
@@ -723,6 +724,28 @@ For each proto package, dalforge generates one **DAL package** (e.g.
 
 Services import only the DAL package. They never see sqlc's `Queries`, a
 pool, SQL or page-token internals.
+
+**Naming** (step 1.8, checked by compiling against sqlc's output):
+- **Package:** the last non-version segment of the proto package, plus `dal`
+  (`orders.v1` → `gen/orders/v1/ordersdal`, `acme.billing.v2beta1` →
+  `billingdal`). A store's package also aliases the models it returns.
+- **Models are named after the proto message:** sqlc runs with
+  `emit_exact_table_names`, plus a `rename` for each table whose name differs
+  from its message (`orders: Order`), so sqlc's singularization never has to
+  be imitated.
+  - **DAL214:** sqlc's `rename` is global and would also rename a column's
+    field with the same name, so a renamed table that collides with a column
+    name is an error.
+- **Interfaces:** `<Store minus "Store">ReadRepository` / `WriteRepository` /
+  `Repository`. Methods are named after the rpc.
+- **Signatures mirror sqlc's:** one query parameter is passed inline
+  (`GetById(ctx, id uuid.UUID)`); more use sqlc's params struct, re-exported as
+  an alias (`OrderUpdateStatusParams`). Get, Create and Update return the
+  model. Delete returns the model when the rpc does, otherwise just `error`.
+- **Create params document what nil means** for every field, in the alias's
+  doc comment.
+- **Module path:** emitting Go needs the consuming module's path
+  (`Layout.Module`, from `dalforge.yaml` in 1.10) to import sqlc's output.
 
 ### From IDL to running code
 

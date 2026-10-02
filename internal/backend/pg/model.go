@@ -89,9 +89,22 @@ func (g GoType) String() string {
 		b.WriteString("[]")
 	}
 	if g.Import != "" {
-		b.WriteString(g.Import[strings.LastIndex(g.Import, "/")+1:])
+		b.WriteString(pkgName(g.Import))
 		b.WriteByte('.')
 	}
 	b.WriteString(g.Name)
 	return b.String()
+}
+
+// pkgName is the identifier a Go file uses for an import: its last path
+// element with characters invalid in identifiers replaced by '_', as sqlc
+// does ("github.com/pgvector/pgvector-go" → "pgvector_go").
+func pkgName(importPath string) string {
+	last := importPath[strings.LastIndex(importPath, "/")+1:]
+	return strings.Map(func(r rune) rune {
+		if r == '-' || r == '.' {
+			return '_'
+		}
+		return r
+	}, last)
 }

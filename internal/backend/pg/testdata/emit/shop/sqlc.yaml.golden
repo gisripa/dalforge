@@ -15,7 +15,10 @@ sql:
         sql_package: pgx/v5
         emit_interface: true
         emit_pointers_for_null_types: true
+        emit_exact_table_names: true
         initialisms: [id, ip, url, uri, uuid, http, json, api, sql]
+        rename:
+          accounts: Account
         overrides:
           # accounts
           - column: accounts.id

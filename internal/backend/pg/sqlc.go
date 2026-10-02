@@ -2,6 +2,7 @@ package pg
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -28,8 +29,18 @@ sql:
         sql_package: pgx/v5
         emit_interface: true
         emit_pointers_for_null_types: true
-        initialisms: [id, ip, url, uri, uuid, http, json, api, sql]
-`, layout.Schema, layout.Generated, layout.Custom, layout.Package, layout.SQLCOut)
+        emit_exact_table_names: true
+        initialisms: [%s]
+`, layout.Schema, layout.Generated, layout.Custom, layout.Package, layout.SQLCOut, strings.Join(_initialisms, ", "))
+
+	// Models are named after the proto message. With exact table names, a
+	// rename (keyed by table name) is only needed when they differ.
+	if renames := modelRenames(m); len(renames) > 0 {
+		b.WriteString("        rename:\n")
+		for _, r := range renames {
+			fmt.Fprintf(&b, "          %s: %s\n", r[0], r[1])
+		}
+	}
 
 	if len(m.Tables) == 0 {
 		return []byte(b.String())
@@ -52,6 +63,44 @@ sql:
 		}
 	}
 	return []byte(b.String())
+}
+
+// _initialisms are the words sqlc upper-cases in generated identifiers
+// (AccountID, ClientIP). camel mirrors the same rule.
+var _initialisms = []string{"id", "ip", "url", "uri", "uuid", "http", "json", "api", "sql"}
+
+// camel is sqlc's identifier for a snake_case name with exact table names:
+// each part title-cased, initialisms upper-cased.
+func camel(snake string) string {
+	var b strings.Builder
+	for _, part := range strings.Split(snake, "_") {
+		if part == "" {
+			continue
+		}
+		if slices.Contains(_initialisms, part) {
+			b.WriteString(strings.ToUpper(part))
+			continue
+		}
+		b.WriteString(strings.ToUpper(part[:1]) + part[1:])
+	}
+	return b.String()
+}
+
+// modelName is the Go name of an entity's model: the proto message name.
+func modelName(t *Table) string {
+	return t.Entity[strings.LastIndex(t.Entity, ".")+1:]
+}
+
+// modelRenames returns [table, model] pairs where sqlc's exact-name struct
+// would differ from the message name.
+func modelRenames(m *Schema) [][2]string {
+	var out [][2]string
+	for _, t := range m.Tables {
+		if camel(t.Name) != modelName(t) {
+			out = append(out, [2]string{t.Name, modelName(t)})
+		}
+	}
+	return out
 }
 
 // _sqlcNames maps SQL types to the names sqlc's catalog uses for db_type
