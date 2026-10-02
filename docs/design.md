@@ -903,6 +903,21 @@ never mix. Custom queries land on the same sqlc `Queries` and can join a
 - **Postgres routing:** `dalpg.DB` holds a `Reader` and a `Writer` pool.
   Eventual reads go to the reader. `CONSISTENCY_STRONG` reads and all writes
   go to the writer. A single-instance setup passes the same pool twice.
+- **`dalpg.Runner`** is the one runtime entry point the generated
+  implementation calls (step 1.9b):
+  - `Read(ctx, op, strong, fn)` routes to the reader, or the writer when the
+    read is strong or there's no reader. `Write(ctx, op, fn)` uses the
+    writer.
+  - `InTx(ctx, op, fn)` runs on the writer and hands `fn` a
+    transaction-bound Runner, whose statements are never retried on their
+    own; the whole transaction is retried by the policy. Nested `InTx` joins
+    the outer transaction.
+  - Every failure becomes a classified `*dal.Error` before the retrier sees
+    it. `fn` receives a `dalpg.DBTX`, which has the same method set as sqlc's,
+    so `sqlcdb.New(q)` works on a pool or a transaction alike.
+  - `dalpg` depends only on pgx (plus `dal`). The generated DAL package's
+    *exported* API still exposes no pgx types; `DBTX` is only used inside the
+    generated implementation.
 - **Runtime libraries** live in this module and are imported, not generated,
   so bug fixes don't need a regeneration:
   - `dal`: `Page[T]`, `All`, the page-token envelope, sentinel errors,
