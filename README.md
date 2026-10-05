@@ -46,6 +46,20 @@ version: `go get github.com/gisripa/dalforge/dal@vX.Y.Z`. See
 [Setting up a project](docs/manual/project-setup.md) for how the two fit
 together and how to upgrade.
 
+## Acknowledgements
+
+dalforge stands on two projects, and wouldn't exist without them:
+
+- **[pgx](https://github.com/jackc/pgx)** by Jack Christensen
+  ([@jackc](https://github.com/jackc)): the Postgres driver the generated
+  code and the runtime run on (MIT).
+- **[sqlc](https://github.com/sqlc-dev/sqlc)** by Kyle Gray
+  ([@kyleconroy](https://github.com/kyleconroy)) and its contributors:
+  dalforge generates SQL and a `sqlc.yaml`, and sqlc turns them into
+  type-safe Go (MIT).
+
+Thank you both.
+
 ## Developing dalforge
 
 The Go toolchain, linters and tasks are managed by
