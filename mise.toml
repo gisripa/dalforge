@@ -92,12 +92,27 @@ run = "docker-compose down -v"
 description = "Open psql on the local Postgres"
 run = "docker-compose exec postgres psql -U dalforge"
 
+[tasks.example]
+description = "Generate everything for examples/orders (schema, queries, sqlc.yaml, the Go DAL) to read in your editor; no database needed"
+depends = ["build"]
+dir = "examples/orders"
+run = [
+  # Build against the runtime in this checkout, not the pinned release (see go.mod).
+  "[ -f go.work ] || go work init . ../../dal",
+  "dalforge generate",
+  "go build ./...",
+]
+
+[tasks.playground]
+description = "Open the local playground: edit a proto and see lint findings plus everything dalforge and sqlc generate (http://127.0.0.1:7070)"
+run = "go run ./cmd/dalforge-playground"
+
 [tasks.demo]
 description = "Run examples/orders like a user would: dalforge generate, then the app on Postgres"
-depends = ["db:up", "build"]
+depends = ["db:up", "example"]
 dir = "examples/orders"
 env = { DATABASE_URL = "postgres://dalforge:dalforge@localhost:55432/dalforge?sslmode=disable" }
-run = ["dalforge generate", "go mod tidy", "go run ."]
+run = "go run ."
 
 [tasks.cover]
 description = "Run tests with a coverage report"

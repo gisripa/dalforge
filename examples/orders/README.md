@@ -10,18 +10,27 @@ pattern, tripping the linter), see the [Quickstart](../../docs/manual/quickstart
 
 ## Run it
 
-From the repository root:
+From the repository root, or from `examples/`:
 
 ```sh
-mise run demo
+mise run demo        # the full run against a local Postgres
+mise run example     # just generate and build: read the output in your editor, no database
+mise run playground  # try your own IDL in a local web page (http://127.0.0.1:7070)
 ```
 
-That starts the local Postgres, builds `dalforge`, then in this directory:
+`mise run demo` starts the local Postgres, builds `dalforge`, then in this
+directory:
 
 ```sh
 dalforge generate   # schema, queries, sqlc.yaml, and the Go DAL (runs sqlc)
 go run .            # the app: fake data, every step checked
 ```
+
+This module's `go.mod` pins the released runtime
+(`github.com/gisripa/dalforge/dal`), the way your project would. Inside this
+repository the tasks add a gitignored `go.work` pointing at `../../dal`, so
+the example always builds against the runtime in your checkout; to do that
+by hand, run `go work init . ../../dal` here.
 
 The app recreates an `orders_demo` database on each run and walks through:
 

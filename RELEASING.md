@@ -29,7 +29,18 @@ Generated code and the runtime are released in lockstep: users run dalforge
    pre-release.
 3. The workflow runs CI, publishes the release with GoReleaser, and pushes
    `dal/v0.1.0`.
-4. Check the release page, then try an install the way users will:
+4. Bump the example to the new runtime, and commit it:
+
+   ```sh
+   cd examples/orders
+   GOWORK=off go get github.com/gisripa/dalforge/dal@v0.1.0
+   GOWORK=off go mod tidy
+   ```
+
+   The example's `go.mod` pins the released runtime, as a user's would; the
+   demo itself builds against the in-repo runtime through a gitignored
+   `go.work`, so this pin only needs to follow releases.
+5. Check the release page, then try an install the way users will:
 
    ```sh
    mise exec github:gisripa/dalforge@0.1.0 -- dalforge version

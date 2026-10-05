@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dalforge playground</title>
+<link rel="stylesheet" href="/static/github.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="/static/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<script src="/static/highlight.min.js"></script>
+<script src="/static/protobuf.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --border: #e2e1dc; --accent: #2f5bd3; --accent-text: #ffffff;
+    --error: #c2362b; --warning: #a26100; --info: #2f5bd3;
+    --code-bg: #fbfbf9; --gutter: #9a9a93; --selected: #eceae4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --panel: #1f1f1d; --text: #e8e7e3; --muted: #9a9a93;
+      --border: #33332f; --accent: #7a9bff; --accent-text: #10131c;
+      --error: #ff7b6f; --warning: #f2b34c; --info: #7a9bff;
+      --code-bg: #1a1a18; --gutter: #6b6b66; --selected: #2a2a27;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  header h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; }
+  header h1 span { color: var(--muted); font-weight: 400; }
+  select, button {
+    font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px;
+  }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button:disabled { opacity: .6; }
+  #status { color: var(--muted); font-size: 13px; margin-left: auto; }
+  main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); min-height: 0; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; grid-auto-rows: minmax(420px, auto); } }
+  section { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  section + section { border-left: 1px solid var(--border); }
+  .caption {
+    font-size: 12px; color: var(--muted); padding: 6px 12px;
+    border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  .editor { flex: 1; display: flex; min-height: 0; background: var(--code-bg); }
+  .gutter, textarea, pre {
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .gutter {
+    padding: 10px 8px 10px 12px; color: var(--gutter); text-align: right;
+    user-select: none; overflow: hidden; white-space: pre; min-width: 44px;
+  }
+  .gutter .bad { color: var(--error); font-weight: 600; }
+  .gutter .warn { color: var(--warning); font-weight: 600; }
+  /* The editor: a transparent textarea over a highlighted copy of its text. */
+  .code { position: relative; flex: 1; min-width: 0; }
+  .code pre, textarea {
+    position: absolute; inset: 0; margin: 0; padding: 10px 12px 10px 4px;
+    white-space: pre; tab-size: 2; overflow: auto; border: 0;
+  }
+  .code pre { pointer-events: none; overflow: hidden; background: transparent; }
+  textarea {
+    resize: none; outline: none; background: transparent;
+    color: transparent; caret-color: var(--text);
+  }
+  textarea::selection { background: rgba(120, 140, 200, .35); color: transparent; }
+  .hljs { background: transparent !important; padding: 0 !important; }
+  #diags { max-height: 32%; overflow: auto; border-bottom: 1px solid var(--border); background: var(--panel); }
+  #diags:empty { display: none; }
+  .diag {
+    display: flex; gap: 8px; padding: 6px 12px; cursor: pointer;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .diag:hover { background: var(--selected); }
+  .diag .sev { font-weight: 600; min-width: 64px; }
+  .diag .sev.error { color: var(--error); }
+  .diag .sev.warning { color: var(--warning); }
+  .diag .sev.info { color: var(--info); }
+  .diag .where { color: var(--muted); min-width: 52px; }
+  .diag .rule { font-family: ui-monospace, monospace; color: var(--muted); }
+  .note { padding: 8px 12px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--border); background: var(--panel); }
+  .note:empty { display: none; }
+  .output { flex: 1; display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 0; }
+  @media (max-width: 640px) { .output { grid-template-columns: 1fr; } }
+  nav { overflow: auto; border-right: 1px solid var(--border); background: var(--panel); padding: 6px 0; }
+  nav h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 8px 12px 4px; }
+  nav a {
+    display: block; padding: 3px 12px; color: var(--text); text-decoration: none;
+    font: 12.5px/1.5 ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  nav a.active { background: var(--selected); font-weight: 600; }
+  pre { margin: 0; padding: 10px 14px; overflow: auto; background: var(--code-bg); }
+  .empty { color: var(--muted); padding: 16px; font-size: 13px; }
+  kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>dalforge <span>playground</span></h1>
+  <label>Preset <select id="preset"></select></label>
+  <button id="run" class="primary" title="Ctrl/⌘ + Enter">Generate</button>
+  <span id="status">loading…</span>
+</header>
+<main>
+  <section>
+    <div class="caption">IDL (proto3). Regenerates as you type; <kbd>Ctrl/⌘</kbd>+<kbd>Enter</kbd> to run now.</div>
+    <div class="editor">
+      <div class="gutter" id="gutter"></div>
+      <div class="code">
+        <pre aria-hidden="true"><code id="highlight" class="hljs language-protobuf"></code></pre>
+        <textarea id="source" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+      </div>
+    </div>
+  </section>
+  <section>
+    <div id="diags"></div>
+    <div class="note" id="note"></div>
+    <div class="output">
+      <nav id="files"></nav>
+      <pre id="content"><span class="empty">Generated files appear here.</span></pre>
+    </div>
+  </section>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const source = $("source"), gutter = $("gutter"), presetSel = $("preset"), highlight = $("highlight");
+  let files = [], selected = "", diags = [], timer = 0, inflight = 0;
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } },
+  };
+
+  function renderGutter() {
+    const lines = source.value.split("\n").length;
+    const marks = new Map();
+    for (const d of diags) {
+      const cls = d.severity === "error" ? "bad" : d.severity === "warning" ? "warn" : "";
+      if (cls && marks.get(d.line) !== "bad") marks.set(d.line, cls);
+    }
+    let html = "";
+    for (let i = 1; i <= lines; i++) {
+      const cls = marks.get(i);
+      html += cls ? `<span class="${cls}">${i}</span>\n` : `${i}\n`;
+    }
+    gutter.innerHTML = html;
+    gutter.scrollTop = source.scrollTop;
+  }
+
+  const languages = { ".sql": "sql", ".go": "go", ".yaml": "yaml", ".yml": "yaml", ".proto": "protobuf" };
+
+  // colorize returns highlighted HTML for code, or escaped text when
+  // highlight.js or the language isn't available.
+  function colorize(code, language) {
+    if (window.hljs && language && hljs.getLanguage(language)) {
+      try { return hljs.highlight(code, { language, ignoreIllegals: true }).value; } catch { /* fall through */ }
+    }
+    return escapeHTML(code);
+  }
+
+  function renderEditor() {
+    // A trailing newline needs a character after it, or the last line collapses.
+    highlight.innerHTML = colorize(source.value, "protobuf") + "\n ";
+    syncScroll();
+  }
+
+  function syncScroll() {
+    const pre = highlight.parentElement;
+    pre.scrollTop = source.scrollTop;
+    pre.scrollLeft = source.scrollLeft;
+    gutter.scrollTop = source.scrollTop;
+  }
+
+  function escapeHTML(s) {
+    return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  }
+
+  function selectLine(line) {
+    const lines = source.value.split("\n");
+    let start = 0;
+    for (let i = 0; i < line - 1 && i < lines.length; i++) start += lines[i].length + 1;
+    const end = start + (lines[line - 1] || "").length;
+    source.focus();
+    source.setSelectionRange(start, end);
+    const lineHeight = parseFloat(getComputedStyle(source).lineHeight) || 19;
+    source.scrollTop = Math.max(0, (line - 4) * lineHeight);
+  }
+
+  function renderDiags() {
+    const box = $("diags");
+    box.innerHTML = "";
+    for (const d of diags) {
+      const row = document.createElement("div");
+      row.className = "diag";
+      row.innerHTML = `<span class="sev ${d.severity}">${d.severity}</span>` +
+        `<span class="where">${d.line}:${d.col}</span>` +
+        (d.rule ? `<span class="rule">${d.rule}</span>` : "") +
+        `<span>${escapeHTML(d.message)}</span>`;
+      row.onclick = () => selectLine(d.line);
+      box.appendChild(row);
+    }
+  }
+
+  function renderFiles() {
+    const nav = $("files");
+    nav.innerHTML = "";
+    if (!files.find((f) => f.path === selected)) selected = files.length ? files[0].path : "";
+    for (const gen of ["dalforge", "sqlc"]) {
+      const group = files.filter((f) => f.generator === gen);
+      if (!group.length) continue;
+      const h = document.createElement("h2");
+      h.textContent = gen === "dalforge" ? "Generated by dalforge" : "Generated by sqlc";
+      nav.appendChild(h);
+      for (const f of group) {
+        const a = document.createElement("a");
+        a.href = "#";
+        a.textContent = f.path;
+        a.title = f.path;
+        if (f.path === selected) a.className = "active";
+        a.onclick = (e) => { e.preventDefault(); selected = f.path; store.set("dalforge.file", selected); renderFiles(); };
+        nav.appendChild(a);
+      }
+    }
+    const f = files.find((x) => x.path === selected);
+    const ext = f ? f.path.slice(f.path.lastIndexOf(".")) : "";
+    $("content").className = "hljs";
+    $("content").innerHTML = f ? colorize(f.content, languages[ext])
+      : `<span class="empty">${diags.some((d) => d.severity === "error") ? "Fix the errors to see the generated files." : "Generated files appear here."}</span>`;
+  }
+
+  async function generate() {
+    const id = ++inflight;
+    const started = performance.now();
+    $("run").disabled = true;
+    $("status").textContent = "generating…";
+    store.set("dalforge.source", source.value);
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: source.value }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const out = await res.json();
+      if (id !== inflight) return; // a newer run started
+      diags = out.diagnostics || [];
+      files = out.files || [];
+      $("note").textContent = out.sqlc ? "sqlc: " + out.sqlc : "";
+      const errors = diags.filter((d) => d.severity === "error").length;
+      const ms = Math.round(performance.now() - started);
+      $("status").textContent = errors
+        ? `${errors} error${errors > 1 ? "s" : ""}`
+        : `${files.length} files in ${ms} ms` + (diags.length ? ` · ${diags.length} note${diags.length > 1 ? "s" : ""}` : "");
+    } catch (err) {
+      if (id !== inflight) return;
+      diags = []; files = [];
+      $("note").textContent = "The playground server failed: " + err.message;
+      $("status").textContent = "failed";
+    } finally {
+      if (id === inflight) $("run").disabled = false;
+    }
+    renderDiags(); renderFiles(); renderGutter();
+  }
+
+  function schedule() { clearTimeout(timer); timer = setTimeout(generate, 600); }
+
+  source.addEventListener("input", () => { renderGutter(); renderEditor(); schedule(); });
+  source.addEventListener("scroll", syncScroll);
+  source.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); clearTimeout(timer); generate(); return; }
+    if (e.key === "Tab" && !e.shiftKey) {
+      e.preventDefault();
+      const s = source.selectionStart;
+      source.setRangeText("  ", s, source.selectionEnd, "end");
+      renderGutter(); renderEditor(); schedule();
+    }
+  });
+  $("run").onclick = () => { clearTimeout(timer); generate(); };
+
+  fetch("/api/presets").then((r) => r.json()).then((presets) => {
+    for (const p of presets) {
+      const o = document.createElement("option");
+      o.value = p.name;
+      o.textContent = p.title;
+      presetSel.appendChild(o);
+    }
+    presetSel.onchange = () => {
+      const p = presets.find((x) => x.name === presetSel.value);
+      if (!p) return;
+      source.value = p.source;
+      store.set("dalforge.preset", p.name);
+      source.scrollTop = 0;
+      renderGutter(); renderEditor(); generate();
+    };
+    const savedPreset = store.get("dalforge.preset");
+    if (savedPreset && presets.some((p) => p.name === savedPreset)) presetSel.value = savedPreset;
+    selected = store.get("dalforge.file") || "";
+    source.value = store.get("dalforge.source") || (presets.find((p) => p.name === presetSel.value) || presets[0]).source;
+    renderGutter(); renderEditor(); generate();
+  }).catch((err) => {
+    $("status").textContent = "failed";
+    $("note").textContent = "Couldn't load the presets: " + err.message;
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+// Mistakes: every rpc or field marked below trips a lint rule.
+//
+// Fix them one at a time and regenerate. Core rules run first; once they're
+// clean, the Postgres rules run and report what's left (the reserved table
+// name and the non-unique lookup are only caught then).
+syntax = "proto3";
+
+package mistakes.v1;
+
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+// Postgres: the default table name, "order", is a reserved word.
+message Order {
+  string id = 1 [(dal.v1.field) = {format: FORMAT_UUID primary_key: true}];
+  string customer_email = 2;
+  string status = 3;
+  optional string note = 4;
+  google.protobuf.Timestamp created_at = 5 [(dal.v1.field).role = ROLE_CREATE_TIME];
+  // Soft delete needs an optional field: live rows have no deletion time.
+  google.protobuf.Timestamp deleted_at = 6 [(dal.v1.field).role = ROLE_DELETE_TIME];
+}
+
+message ByEmail {
+  string customer_email = 1;
+}
+
+message ByStatus {
+  string status = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ByStatusInWindow {
+  string status = 1;
+  google.protobuf.Timestamp created_at_from = 2;
+  google.protobuf.Timestamp created_at_to = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message OrderPage {
+  repeated Order orders = 1;
+  string next_page_token = 2;
+}
+
+service OrderStore {
+  option (dal.v1.store) = {entity: "Order"};
+
+  // Postgres: customer_email isn't unique, so this could match many rows.
+  rpc GetOrderByEmail(ByEmail) returns (Order) {
+    option (dal.v1.query) = {get: {by: ["customer_email"]}};
+  }
+  // A typo in a field name.
+  rpc GetOrderByMail(ByEmail) returns (Order) {
+    option (dal.v1.query) = {get: {by: ["customer_emial"]}};
+  }
+  // Sorting by a nullable field would drop rows where it's NULL.
+  rpc ListOrdersByStatus(ByStatus) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["status"]
+        order_by: ["note"]
+      }
+    };
+  }
+  // A range must be the leading sort field.
+  rpc ListOrdersByStatusAndCreatedAt(ByStatusInWindow) returns (OrderPage) {
+    option (dal.v1.query) = {
+      list: {
+        eq: ["status"]
+        range: "created_at"
+        order_by: ["id"]
+      }
+    };
+  }
+}

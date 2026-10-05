@@ -6,9 +6,11 @@ In about ten minutes, starting from a fresh clone, you'll:
 2. look at everything dalforge generated from one `.proto` file;
 3. change an access pattern and watch the schema and the Go API follow;
 4. make a few classic mistakes and see the linter stop them;
-5. run dalforge's own test suites.
+5. try any IDL you like in a local playground;
+6. run dalforge's own test suites.
 
-Everything here runs from the repository root unless a step says otherwise.
+The `mise run` tasks work from the repository root or from inside
+`examples/`.
 
 ## 0. Prerequisites
 
@@ -38,7 +40,14 @@ That one command:
   lives in memory);
 - builds `bin/dalforge`;
 - in `examples/orders`, runs `dalforge generate` (schema, queries,
-  `sqlc.yaml`, then sqlc and the Go DAL), `go mod tidy` and `go run .`.
+  `sqlc.yaml`, then sqlc and the Go DAL), builds the app and runs it.
+
+No Docker handy? `mise run example` does the generate-and-build part only,
+so you can read every generated file in your editor without a database.
+
+The example's `go.mod` pins the released runtime, like a real project. The
+tasks add a `go.work` (gitignored) so it builds against the runtime in your
+checkout instead.
 
 The app creates a fresh `orders_demo` database, applies the generated schema
 and plays out a shop's day with fake data from
@@ -293,7 +302,23 @@ Every rule is explained in the [lint rule catalog](lint-rules.md).
 Undo your edits with `git checkout examples/orders/proto`, then run
 `dalforge generate` again.
 
-## 5. Run the tests
+## 5. Try anything in the playground
+
+```sh
+mise run playground          # then open http://127.0.0.1:7070
+```
+
+A local page with a proto editor on the left and, on the right, the lint
+findings and every file generated from it: dalforge's schema, queries,
+`sqlc.yaml` and Go DAL, plus sqlc's own Go output. It regenerates as you
+type. Presets cover the basics, soft delete and versions, Postgres types
+(dates, `inet`, decimals, `jsonb`, `vector`), lists and indexes, and a file
+full of mistakes to fix. Click a finding to jump to its line.
+
+It runs the same pipeline as `dalforge generate`, in a throwaway directory
+per request, and listens on the loopback address only.
+
+## 6. Run the tests
 
 ```sh
 mise run check              # lint + unit and golden tests + build; no Docker, about 15 s

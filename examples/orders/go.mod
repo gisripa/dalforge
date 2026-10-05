@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/brianvoe/gofakeit/v7 v7.17.1
-	github.com/gisripa/dalforge/dal v0.0.0
+	github.com/gisripa/dalforge/dal v0.0.3
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
 )
@@ -17,6 +17,8 @@ require (
 	golang.org/x/text v0.29.0 // indirect
 )
 
-// The example uses this repository's runtime module (dal, dalpg). A real project
-// would require a released version instead.
-replace github.com/gisripa/dalforge/dal => ../../dal
+// This module pins the released runtime, as a real project would. Inside the
+// dalforge repository, `mise run demo` and `mise run example` add a go.work
+// (gitignored) that points github.com/gisripa/dalforge/dal at ../../dal, so
+// the example always builds against the runtime in this checkout. To do the
+// same by hand: go work init . ../../dal

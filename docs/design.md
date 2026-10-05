@@ -808,6 +808,56 @@ for o, err := range dal.All(ctx, shopdal.OrderListOrdersByAccountParams{AccountI
 }
 ```
 
+### Planned: backward paging
+
+Paging only goes forward: a page carries a `NextPageToken` built from its
+last row, and there is no previous-page token. (Listing in the opposite
+order is already a second rpc with the opposite `order_by`, sharing the same
+index.) Backward paging is planned as an opt-in per list (for example
+`list: {… bidirectional: true}`), because most API lists and every `dal.All`
+iteration only go forward, and it costs a third query per list:
+
+- **A `<Name>Before` query:** the cursor comparison flipped (`<` ↔ `>`) and the
+  `ORDER BY` reversed, fetching `size + 1` rows that the repository reverses
+  back into display order. It reads the same index the other way, so it adds
+  no index.
+- **Direction in the token:** the envelope gains a direction (its version
+  field allows the change); pages gain a `PrevPageToken` built from their
+  first row, empty on the first page.
+- **Shapes:** the List response may carry `prev_page_token` (DAL107), and
+  `dal.Page` gains the field.
+
+**The consistency caveat matters more going backwards.** Postgres has no
+time-travel reads (nothing like Oracle's `AS OF` or SQL Server's temporal
+tables), and each page is its own statement, so every page sees the table as
+of the moment it runs. Paging forward, the guarantees in "Contract" above
+still hold for rows that don't change. Paging back and forth, the user can
+see surprising pages:
+
+- "next, then previous" can return a different page than the one already
+  shown: rows inserted or deleted behind the cursor in between shift what
+  the previous page holds;
+- a previous page can come back shorter or fuller than before, or a page
+  boundary can move, so the same row may appear at the end of one page and
+  the start of the other;
+- for newest-first lists, new rows land "before" the first page, so going
+  back to the start shows rows that weren't there on the way forward.
+
+Ways to narrow it, each with a cost, to decide when this is built:
+
+- **Accept and document it**, as forward paging does today. This is usually
+  fine for UIs that re-fetch.
+- **An as-of bound in the token:** record the time of the first page and add
+  `created_at <= @as_of` to every page, so later inserts stay out of the
+  iteration. It needs a create-time column, ignores updates and deletes, and
+  isn't exact: `now()` is the transaction start time, so a row created
+  earlier but committed later can still slip in.
+- **A real snapshot:** one `REPEATABLE READ` transaction, or
+  `pg_export_snapshot()`, held open across requests. It's exact, but it ties
+  a client session to a database connection and holds back vacuum, so it
+  doesn't fit stateless page tokens. It's an option for exports, as a custom
+  query, not for generated lists.
+
 ## 7. Generated Go API
 
 For each proto package, dalforge generates one **DAL package** (e.g.
@@ -1432,6 +1482,7 @@ out:                           # defaults shown
 | Generated docs | `internal/docgen` fails when a generated page of the manual is stale (`mise run docs` regenerates); `internal/rules` checks the rule catalog against the code; `internal/manualtest` checks links | `mise run test` |
 | Integration | `//go:build integration` tests that need Postgres: `dal/dalpg` (real SQLSTATE mapping, a real `40001` from conflicting serializable transactions, a real admin shutdown `57P01`, reader/writer routing, transactions, the pgx tracer) and `internal/integration` (server version, lossless `numeric` round trip) | `mise run test:integration` (runs `vm:up` and `db:up` first) |
 | End to end | `examples/orders`, run like a user's project: generate → sqlc → build → a demo app exercising every access pattern against Postgres | `mise run demo` |
+| Playground | every preset generates cleanly (the mistakes preset reports exactly its rules), sqlc accepts every clean preset's output with no `pgtype`, load errors come back positioned, and the HTTP API works | `mise run test` |
 
 `mise run check` stays fast and Docker-free. CI (`.github/workflows/ci.yml`)
 runs `check` in one job and `test:integration` plus `demo` in another.
@@ -1479,7 +1530,15 @@ queries in `queries/custom/`, and an app (`main.go`). Everything dalforge and
 sqlc generate is gitignored, including `dalforge.lock`, because the example
 always runs the dalforge built from the same checkout; a real project
 commits its lock. `mise run demo` generates and runs it, and it's the
-end-to-end test in CI.
+end-to-end test in CI; `mise run example` only generates and builds it, with
+no database.
+
+**Its `go.mod` pins the released runtime** (`dal vX.Y.Z`), with no `replace`
+directive, so the directory is a copyable, self-contained project. The
+`example` and `demo` tasks add a gitignored `go.work` that points the runtime
+at `../../dal`, so CI and local runs test the generator and the runtime from
+the same checkout: a change spanning both never has to be released before it
+can be tested. The pin is bumped after each release (RELEASING.md).
 
 It models **`Account`** and **`Order`** (`Order.account_id` refers to
 `Account.id`) and plays out a shop's day with gofakeit data, checking every
@@ -1506,6 +1565,29 @@ outcome and exiting non-zero on any surprise:
 
 The quickstart (`docs/manual/quickstart.md`) is the guided tour of this
 example: what's generated, adding a list, and tripping the linter.
+
+### Playground
+
+`mise run playground` serves a local page (`cmd/dalforge-playground`,
+`internal/playground`) on `127.0.0.1:7070` for trying any IDL: a proto
+editor, the lint findings (click one to jump to its line), and every
+generated file, dalforge's and sqlc's, regenerated as you type. Presets
+cover basics, roles, Postgres types, lists and indexes, and a file of
+deliberate mistakes.
+
+- **The real pipeline, server-side:** each request writes the source into a
+  throwaway project and runs `pipeline.Build` and `pipeline.Generate`,
+  including sqlc from `PATH`, exactly as `dalforge generate` does. Nothing is
+  reimplemented for the page, so it can't drift from the CLI.
+- **Local only:** it listens on loopback and runs sqlc on whatever the page
+  sends, with a size limit and a timeout per request. It's a tool for people
+  with the repository checked out, not a hosted service.
+- **Works offline:** one embedded HTML file with plain JavaScript, plus
+  vendored, embedded highlight.js (BSD-3-Clause, with its protobuf grammar
+  and GitHub light/dark themes) for syntax coloring. The editor colors its
+  text by layering a transparent textarea over a highlighted copy of it.
+- **Not in the CLI:** it's a separate command, so the released `dalforge`
+  binary stays a generator.
 
 ## 12. Documentation
 
@@ -1604,3 +1686,5 @@ rules and limitations. Every change updates the sections it affects.
 | Container runtime | Colima via mise (dedicated `dalforge` profile, repo-scoped `DOCKER_HOST`); native Docker in CI. Chosen over embedded Postgres so that future backends and fault-injection proxies share one mechanism |
 | Retries | SQLSTATE classification into Retryable / RetryableIfIdempotent / NotRetryable, plus per-op idempotency; pluggable `dal.Retrier` (closure-friendly) and classifier; built-in exponential backoff default; libraries such as failsafe-go plug in through `dal.RetrierFunc` |
 | Onboarding | The quickstart plus `examples/orders`, a standalone consumer module run end to end by `mise run demo` (and in CI); its generated output is gitignored so a reader sees exactly what the current IDL produces |
+| Example dependencies | The example's `go.mod` pins the released runtime (no `replace`); a gitignored `go.work`, written by the tasks, builds it against the in-repo runtime (2026-10-04) |
+| Playground | A localhost page served by a separate command, running the real pipeline and sqlc server-side per request; presets, no sharing or hosting (2026-10-04) |
