@@ -1,0 +1,49 @@
+// Basics: one entity, its key, and the single-row access patterns.
+//
+// Try: make `bio` required (drop `optional`) and see the column become
+// NOT NULL and the Go field lose its pointer; or rename `email` to `mail`
+// and watch the lint error for the get.by that still names it.
+syntax = "proto3";
+
+package basics.v1;
+
+import "dal/v1/options.proto";
+import "google/protobuf/empty.proto";
+
+message User {
+  // "user" is a reserved word in SQL, so the table needs an explicit name.
+  option (dal.v1.table) = {name: "users"};
+
+  string id = 1 [(dal.v1.field) = {format: FORMAT_UUID primary_key: true}];
+  string email = 2 [(dal.v1.field).unique = true];
+  string display_name = 3;
+  optional string bio = 4;
+}
+
+message UserKey {
+  string id = 1;
+}
+
+message EmailKey {
+  string email = 1;
+}
+
+service UserStore {
+  option (dal.v1.store) = {entity: "User"};
+
+  rpc GetUser(UserKey) returns (User) {
+    option (dal.v1.query) = {get: {}};
+  }
+  rpc GetUserByEmail(EmailKey) returns (User) {
+    option (dal.v1.query) = {get: {by: ["email"]}};
+  }
+  rpc CreateUser(User) returns (User) {
+    option (dal.v1.query) = {create: {}};
+  }
+  rpc UpdateUserProfile(User) returns (User) {
+    option (dal.v1.query) = {update: {columns: ["display_name", "bio"]}};
+  }
+  rpc DeleteUser(UserKey) returns (google.protobuf.Empty) {
+    option (dal.v1.query) = {delete: {}};
+  }
+}

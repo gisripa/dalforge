@@ -6,9 +6,11 @@ In about ten minutes, starting from a fresh clone, you'll:
 2. look at everything dalforge generated from one `.proto` file;
 3. change an access pattern and watch the schema and the Go API follow;
 4. make a few classic mistakes and see the linter stop them;
-5. run dalforge's own test suites.
+5. try any IDL you like in a local playground;
+6. run dalforge's own test suites.
 
-Everything here runs from the repository root unless a step says otherwise.
+The `mise run` tasks work from the repository root or from inside
+`demos/`.
 
 ## 0. Prerequisites
 
@@ -37,8 +39,15 @@ That one command:
 - starts the Colima VM and a throwaway `postgres:16.9` (`compose.yaml`; data
   lives in memory);
 - builds `bin/dalforge`;
-- in `examples/orders`, runs `dalforge generate` (schema, queries,
-  `sqlc.yaml`, then sqlc and the Go DAL), `go mod tidy` and `go run .`.
+- in `demos/orders`, runs `dalforge generate` (schema, queries,
+  `sqlc.yaml`, then sqlc and the Go DAL), builds the app and runs it.
+
+No Docker handy? `mise run example` does the generate-and-build part only,
+so you can read every generated file in your editor without a database.
+
+The example's `go.mod` pins the released runtime, like a real project. The
+tasks add a `go.work` (gitignored) so it builds against the runtime in your
+checkout instead.
 
 The app creates a fresh `orders_demo` database, applies the generated schema
 and plays out a shop's day with fake data from
@@ -79,18 +88,18 @@ outcome, and the run exits non-zero if anything is off. Pass `-seed N` to
 All checks passed.
 ```
 
-The app's code is [`examples/orders/main.go`](../../examples/orders/main.go).
+The app's code is [`demos/orders/main.go`](../../demos/orders/main.go).
 It's an ordinary Go program that only sees the generated interfaces: no SQL,
 no pools, and no pgx types.
 
 ## 2. What you wrote vs. what dalforge generated
 
-A fresh clone of `examples/orders` contains only what a dalforge user writes.
+A fresh clone of `demos/orders` contains only what a dalforge user writes.
 Everything generated is gitignored, so after the demo, `git status` stays
 clean and you can explore the output freely:
 
 ```text
-examples/orders/
+demos/orders/
 ├── dalforge.yaml                  yours: project config
 ├── dalforge.lock                  pins dalforge, its options and sqlc (a real project commits it*)
 ├── proto/shop/v1/shop.proto       yours: entities and access patterns
@@ -116,7 +125,7 @@ generates with the same toolchain ([details](project-setup.md#dalforgelock)).
 ### The input
 
 One message per table, one service per entity, and one rpc per access
-pattern ([full file](../../examples/orders/proto/shop/v1/shop.proto)):
+pattern ([full file](../../demos/orders/proto/shop/v1/shop.proto)):
 
 ```proto
 message Order {
@@ -229,7 +238,7 @@ orders := shopdal.NewOrderRepository(runner) // a shopdal.OrderRepository
 ## 3. Change an access pattern
 
 Say the product needs "an account's orders in one status, newest first". Add
-the rpc and its request message to `examples/orders/proto/shop/v1/shop.proto`:
+the rpc and its request message to `demos/orders/proto/shop/v1/shop.proto`:
 
 ```proto
   rpc ListOrdersByAccountAndStatus(ByAccountStatus) returns (OrderPage) {
@@ -249,7 +258,7 @@ message ByAccountStatus {
 Then regenerate:
 
 ```sh
-cd examples/orders
+cd demos/orders
 dalforge lint        # silent: nothing to complain about
 dalforge generate
 ```
@@ -290,10 +299,26 @@ Each finding names the rule, the place, the consequence and the fix.
 `dalforge generate` refuses to write anything while there are errors.
 Every rule is explained in the [lint rule catalog](lint-rules.md).
 
-Undo your edits with `git checkout examples/orders/proto`, then run
+Undo your edits with `git checkout demos/orders/proto`, then run
 `dalforge generate` again.
 
-## 5. Run the tests
+## 5. Try anything in the playground
+
+```sh
+mise run playground          # then open http://127.0.0.1:7070
+```
+
+A local page with a proto editor on the left and, on the right, the lint
+findings and every file generated from it: dalforge's schema, queries,
+`sqlc.yaml` and Go DAL, plus sqlc's own Go output. It regenerates as you
+type. Presets cover the basics, soft delete and versions, Postgres types
+(dates, `inet`, decimals, `jsonb`, `vector`), lists and indexes, and a file
+full of mistakes to fix. Click a finding to jump to its line.
+
+It runs the same pipeline as `dalforge generate`, in a throwaway directory
+per request, and listens on the loopback address only.
+
+## 6. Run the tests
 
 ```sh
 mise run check              # lint + unit and golden tests + build; no Docker, about 15 s

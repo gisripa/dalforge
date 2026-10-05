@@ -25,8 +25,8 @@ import (
 
 	"github.com/gisripa/dalforge/dal"
 	"github.com/gisripa/dalforge/dal/dalpg"
-	"github.com/gisripa/dalforge/examples/orders/gen/shop/v1/shopdal"
-	"github.com/gisripa/dalforge/examples/orders/gen/sqlcdb"
+	"github.com/gisripa/dalforge/demos/orders/gen/shop/v1/shopdal"
+	"github.com/gisripa/dalforge/demos/orders/gen/sqlcdb"
 )
 
 // _defaultURL is the repository's local Postgres (compose.yaml).

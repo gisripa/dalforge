@@ -1,0 +1,75 @@
+// Types: the default mapping, and how to steer away from it.
+//
+// Look at schema.sql for the column types, and at gen/sqlcdb/models.go for
+// the Go types: plain values for required columns, pointers for optional
+// ones, never pgx's pgtype wrappers. Try: put TYPE_UUID on `name` and read
+// the lint error (the Go type follows the proto type, so only compatible
+// Postgres types are allowed).
+syntax = "proto3";
+
+package types.v1;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// Extension types need their extension declared.
+option (dal.pg.v1.file) = {extensions: ["vector"]};
+
+enum Plan {
+  PLAN_UNSPECIFIED = 0;
+  PLAN_FREE = 1;
+  PLAN_PRO = 2;
+}
+
+message Address {
+  string city = 1;
+  string country = 2;
+}
+
+message Tenant {
+  int64 id = 1 [(dal.v1.field).primary_key = true];
+  string name = 2;
+  // Enums are text holding the value name.
+  Plan plan = 3;
+  // An exact decimal: numeric in Postgres, string in Go.
+  string balance = 4 [(dal.v1.field).format = FORMAT_DECIMAL];
+  // A parameterised type: custom_type plus the Go type to use.
+  string price = 5 [(dal.pg.v1.column) = {
+    custom_type: "numeric(12, 2)"
+    go_type: "string"
+  }];
+  // A narrower integer, with a default.
+  int32 seats = 6 [(dal.pg.v1.column) = {
+    type: TYPE_SMALLINT
+    default: "1"
+  }];
+  // A Timestamp stored as a date.
+  google.protobuf.Timestamp trial_ends_on = 7 [(dal.pg.v1.column).type = TYPE_DATE];
+  optional string last_login_ip = 8 [(dal.pg.v1.column).type = TYPE_INET];
+  // Repeated scalars become arrays; messages and Struct become jsonb.
+  repeated string tags = 9;
+  Address address = 10;
+  google.protobuf.Struct settings = 11;
+  // An extension type, with the Go type pgx should scan it into.
+  string embedding = 12 [(dal.pg.v1.column) = {
+    custom_type: "vector(3)"
+    go_type: "github.com/pgvector/pgvector-go.Vector"
+  }];
+}
+
+message TenantKey {
+  int64 id = 1;
+}
+
+service TenantStore {
+  option (dal.v1.store) = {entity: "Tenant"};
+
+  rpc GetTenant(TenantKey) returns (Tenant) {
+    option (dal.v1.query) = {get: {}};
+  }
+  rpc CreateTenant(Tenant) returns (Tenant) {
+    option (dal.v1.query) = {create: {}};
+  }
+}

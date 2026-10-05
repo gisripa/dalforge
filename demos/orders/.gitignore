@@ -8,3 +8,8 @@
 # always runs the dalforge built from this repository's checkout, so a pinned
 # version would be wrong on every release tag; dalforge generate recreates it.
 /dalforge.lock
+
+# Workspace pointing the runtime at ../../dal; created by `mise run demo` and
+# `mise run example` (see go.mod).
+/go.work
+/go.work.sum

@@ -1,5 +1,5 @@
 version: 1
-module: github.com/gisripa/dalforge/examples/orders
+module: github.com/gisripa/dalforge/demos/orders
 backend: pg
 proto:
   roots: [proto]

@@ -1,0 +1,59 @@
+// Roles: columns the generated code manages for you.
+//
+// ROLE_VERSION makes every update a compare-and-swap; ROLE_DELETE_TIME makes
+// delete soft and filters deleted rows out of every read; the time roles get
+// now() defaults. Try: remove the deleted_at field and compare the queries
+// (the `deleted_at IS NULL` filters disappear, and delete becomes a real
+// DELETE).
+syntax = "proto3";
+
+package docs.v1;
+
+import "dal/pg/v1/options.proto";
+import "dal/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+
+message Document {
+  string id = 1 [(dal.v1.field) = {format: FORMAT_UUID primary_key: true}];
+  // Unique among live rows only: a soft-deleted document frees its slug.
+  string slug = 2 [(dal.v1.field).unique = true];
+  string title = 3;
+  // A default: pass nil in Create and the column default applies.
+  string status = 4 [(dal.pg.v1.column).default = "'draft'"];
+  int64 version = 5 [(dal.v1.field).role = ROLE_VERSION];
+  google.protobuf.Timestamp created_at = 6 [(dal.v1.field).role = ROLE_CREATE_TIME];
+  google.protobuf.Timestamp updated_at = 7 [(dal.v1.field).role = ROLE_UPDATE_TIME];
+  optional google.protobuf.Timestamp deleted_at = 8 [(dal.v1.field).role = ROLE_DELETE_TIME];
+}
+
+message DocumentKey {
+  string id = 1;
+}
+
+service DocumentStore {
+  option (dal.v1.store) = {entity: "Document"};
+
+  rpc GetDocument(DocumentKey) returns (Document) {
+    option (dal.v1.query) = {get: {}};
+  }
+  rpc CreateDocument(Document) returns (Document) {
+    option (dal.v1.query) = {create: {}};
+  }
+  // Compare-and-swap on version: a stale version returns ErrVersionConflict.
+  rpc PublishDocument(Document) returns (Document) {
+    option (dal.v1.query) = {update: {columns: ["status"]}};
+  }
+  // Insert, or update the title of the live document with this slug.
+  rpc UpsertDocumentBySlug(Document) returns (Document) {
+    option (dal.v1.query) = {
+      upsert: {
+        conflict_on: ["slug"]
+        columns: ["title"]
+      }
+    };
+  }
+  // Soft: sets deleted_at, and reads stop seeing the row.
+  rpc DeleteDocument(DocumentKey) returns (Document) {
+    option (dal.v1.query) = {delete: {}};
+  }
+}

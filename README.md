@@ -12,7 +12,8 @@ pagination, soft delete, optimistic locking, column defaults), and unsafe ones
 are rejected by a linter that explains why.
 
 - **Try it:** [Quickstart](docs/manual/quickstart.md), which runs `mise run demo`
-  and tours everything dalforge generates for the [example shop](examples/orders).
+  and tours everything dalforge generates for the [example shop](demos/orders),
+  or `mise run playground` to try your own IDL in a local web page.
 - **Use it:** [the manual](docs/manual/README.md).
 - **Why it's built this way:** [the design doc](docs/design.md).
 
@@ -76,7 +77,9 @@ mise run db:up                    # start the Colima VM + local postgres:16.9 (d
 mise run vm:down                  # stop the VM when done (frees ~2 GB RAM)
 mise run test:integration         # integration tests against it
 mise run check:all                # check + Postgres tests
-mise run demo                     # run examples/orders end to end, like a user would
+mise run demo                     # run demos/orders end to end, like a user would
+mise run example                  # generate demos/orders to read in your editor (no database)
+mise run playground               # local playground: edit a proto, see everything generated
 mise run docs                     # regenerate the generated parts of docs/manual
 ```
 
@@ -86,18 +89,20 @@ mise run docs                     # regenerate the generated parts of docs/manua
 cmd/dalforge/          CLI entrypoint
 dal/                   the runtime module (own go.mod), stdlib only: errors, ops, retries, pages
 dal/dalpg/             runtime on pgx v5: reader/writer routing, SQLSTATE mapping, transactions
-internal/cli/          subcommands (generate, lint, lock)
+internal/cli/          subcommands (generate, lint, lock, version), text and -json output
 internal/config/       dalforge.yaml
 internal/pipeline/     load → check → build → emit → write → sqlc; dalforge.lock
 internal/idl/          IDL loading: resolver serving the bundled options, typed option decoding
 internal/ir/           the backend-neutral model (entities, stores, access patterns)
 internal/check/        backend-neutral lint rules (DAL1xx)
 internal/backend/pg/   Postgres: physical model, indexes, rules (DAL2xx), SQL, sqlc.yaml, the Go DAL
-internal/manualtest/   keeps docs/manual true to the code (rule catalog, links)
+internal/manualtest/   checks every link and anchor in docs/manual
 internal/golden/       golden-file assertions for generator output
 internal/pgtest/       per-test Postgres databases for integration tests
 internal/integration/  Postgres tests (build tag `integration`)
-examples/orders/       a user project: IDL, config, custom queries and a demo app
+demos/                 demo-only, each its own module, using dalforge only as users do (the CLI and the runtime)
+demos/orders/          a user-style project: IDL, config, custom queries and a demo app
+demos/playground/      the local playground: a page that runs `dalforge generate -json` on the IDL you edit
 compose.yaml           local postgres:16.9 for integration tests and the demo
 proto/dal/v1/          dal.v1 backend-neutral options + Go bindings (dalv1)
 proto/dal/pg/v1/       dal.pg.v1 Postgres options + Go bindings (pgv1)
