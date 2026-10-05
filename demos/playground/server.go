@@ -1,33 +1,21 @@
-// Package playground serves a local web page for trying the IDL: edit a
-// proto file and see the lint findings and everything dalforge and sqlc
-// generate from it. Each request runs the same pipeline as `dalforge
-// generate`, in a throwaway project directory.
-//
-// It's meant for localhost: the server binds to the loopback address and runs
-// sqlc on whatever the browser sends.
-package playground
+package main
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
-	"maps"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/gisripa/dalforge/internal/config"
-	"github.com/gisripa/dalforge/internal/pipeline"
 )
 
 //go:embed index.html
@@ -46,27 +34,37 @@ var _static embed.FS
 const (
 	_maxSource = 256 << 10 // bytes of proto source per request
 	_timeout   = 30 * time.Second
-	// _protoFile is where the edited source is written in the throwaway
-	// project; the proto package inside it decides the DAL package path.
+	// _protoFile is where the edited source goes in the throwaway project;
+	// the proto package inside it decides the DAL package path.
 	_protoFile = "proto/playground.proto"
 	_config    = "version: 1\nmodule: example.com/playground\nbackend: pg\n"
+	// _sqlcOut is sqlc's output directory under the default dalforge.yaml.
+	_sqlcOut = "gen/sqlcdb/"
 )
 
-// Server is the playground's HTTP handler.
+// Server is the playground's HTTP handler. It runs the dalforge CLI, exactly
+// as a user's project would, so the page shows real output and can never
+// drift from the released tool.
 type Server struct {
-	sqlc string // sqlc binary; empty skips sqlc's output
-	mux  *http.ServeMux
+	dalforge string // the dalforge binary
+	version  string // its `dalforge version` output
+	mux      *http.ServeMux
 }
 
-// New returns the playground handler. sqlc is the sqlc binary to run on the
-// generated configuration; empty shows dalforge's output only.
-func New(sqlc string) *Server {
-	s := &Server{sqlc: sqlc, mux: http.NewServeMux()}
+// NewServer returns the playground handler, running the given dalforge
+// binary. dalforge finds sqlc on PATH itself.
+func NewServer(ctx context.Context, dalforge string) (*Server, error) {
+	out, err := exec.CommandContext(ctx, dalforge, "version").Output()
+	if err != nil {
+		return nil, fmt.Errorf("run %s version: %w", dalforge, err)
+	}
+	s := &Server{dalforge: dalforge, version: strings.TrimSpace(string(out)), mux: http.NewServeMux()}
 	s.mux.HandleFunc("GET /{$}", s.index)
 	s.mux.Handle("GET /static/", http.FileServerFS(_static))
+	s.mux.HandleFunc("GET /api/info", s.info)
 	s.mux.HandleFunc("GET /api/presets", s.presets)
 	s.mux.HandleFunc("POST /api/generate", s.generate)
-	return s
+	return s, nil
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
@@ -74,6 +72,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.Serve
 func (s *Server) index(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(_index)
+}
+
+func (s *Server) info(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, map[string]string{"dalforge": s.version})
 }
 
 // Preset is an example IDL offered in the page.
@@ -120,7 +122,7 @@ type Request struct {
 	Source string `json:"source"`
 }
 
-// Diagnostic is one lint finding or load error, positioned in the source.
+// Diagnostic is one lint finding or load error in the source.
 type Diagnostic struct {
 	Line     int    `json:"line"`
 	Col      int    `json:"col"`
@@ -140,9 +142,9 @@ type File struct {
 type Response struct {
 	Diagnostics []Diagnostic `json:"diagnostics"`
 	Files       []File       `json:"files"`
-	// SQLC explains why sqlc's output is missing, when it is: sqlc isn't
-	// installed, there are no queries, or sqlc reported an error.
-	SQLC string `json:"sqlc,omitempty"`
+	// Note explains a failure that isn't about the source, such as sqlc
+	// missing or rejecting the generated SQL.
+	Note string `json:"note,omitempty"`
 }
 
 func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
@@ -161,12 +163,33 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, resp)
 }
 
-// Run generates from one proto source, in a throwaway project directory.
-// Problems in the source come back as diagnostics; the error is reserved for
-// the playground itself failing.
+// cliReport is the part of `dalforge generate -json`'s report the playground
+// reads (see the CLI's Report type).
+type cliReport struct {
+	Diagnostics []struct {
+		File     string `json:"file"`
+		Line     int    `json:"line"`
+		Col      int    `json:"col"`
+		Severity string `json:"severity"`
+		Rule     string `json:"rule"`
+		Message  string `json:"message"`
+	} `json:"diagnostics"`
+	Generated *struct {
+		RanSQLC  bool   `json:"ran_sqlc"`
+		SQLCNote string `json:"sqlc_note"`
+	} `json:"generated"`
+	Error string `json:"error"`
+}
+
+// Run generates from one proto source: it writes a throwaway project, runs
+// `dalforge generate -json` in it, and returns the findings and every file
+// generated. Problems in the source come back as diagnostics; the error is
+// reserved for the playground itself failing.
 func (s *Server) Run(ctx context.Context, source string) (*Response, error) {
+	resp := &Response{Diagnostics: []Diagnostic{}, Files: []File{}}
 	if len(source) > _maxSource {
-		return &Response{Diagnostics: []Diagnostic{{Line: 1, Col: 1, Severity: "error", Message: "the source is larger than the playground accepts"}}}, nil
+		resp.Diagnostics = append(resp.Diagnostics, Diagnostic{Line: 1, Col: 1, Severity: "error", Message: "the source is larger than the playground accepts"})
+		return resp, nil
 	}
 	dir, err := os.MkdirTemp("", "dalforge-playground-")
 	if err != nil {
@@ -179,87 +202,63 @@ func (s *Server) Run(ctx context.Context, source string) (*Response, error) {
 	if err := writeFile(filepath.Join(dir, filepath.FromSlash(_protoFile)), source); err != nil {
 		return nil, err
 	}
-	cfg, err := config.Load(filepath.Join(dir, "dalforge.yaml"))
+
+	var stdout, stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, s.dalforge, "generate", "-json", "-config", filepath.Join(dir, "dalforge.yaml"))
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	runErr := cmd.Run()
+	var rep cliReport
+	if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
+		// Not a report: dalforge itself failed (or isn't a version with -json).
+		return nil, fmt.Errorf("dalforge generate: %v: %s", errors.Join(runErr, err), strings.TrimSpace(stderr.String()))
+	}
+	for _, d := range rep.Diagnostics {
+		resp.Diagnostics = append(resp.Diagnostics, Diagnostic{Line: max(d.Line, 1), Col: max(d.Col, 1), Severity: d.Severity, Rule: d.Rule, Message: d.Message})
+	}
+	resp.Note = rep.Error
+	if rep.Generated == nil {
+		return resp, nil
+	}
+	if !rep.Generated.RanSQLC {
+		resp.Note = "sqlc didn't run: " + rep.Generated.SQLCNote
+	}
+	files, err := generatedFiles(dir)
 	if err != nil {
 		return nil, err
 	}
+	resp.Files = files
+	return resp, nil
+}
 
-	resp := &Response{Diagnostics: []Diagnostic{}, Files: []File{}}
-	plan, err := pipeline.Build(ctx, cfg)
-	if err != nil {
-		resp.Diagnostics = loadErrors(err)
-		return resp, nil
-	}
-	for _, d := range plan.Diags {
-		resp.Diagnostics = append(resp.Diagnostics, Diagnostic{
-			Line: d.Pos.Line, Col: d.Pos.Col, Severity: d.Severity.String(), Rule: d.Rule, Message: d.Message,
-		})
-	}
-	if plan.Diags.HasErrors() {
-		return resp, nil
-	}
-	for _, p := range slices.Sorted(maps.Keys(plan.Files)) {
-		resp.Files = append(resp.Files, File{Path: p, Generator: "dalforge", Content: string(plan.Files[p])})
-	}
-
-	if s.sqlc == "" {
-		resp.SQLC = "sqlc isn't on PATH, so sqlc's Go output (models, queries) isn't shown. Run the playground with `mise run playground`."
-		return resp, nil
-	}
-	sum, err := pipeline.Generate(ctx, cfg, plan, s.sqlc)
-	switch {
-	case err != nil:
-		resp.SQLC = err.Error()
-		return resp, nil
-	case !sum.RanSQLC:
-		resp.SQLC = sum.SQLCNote
-		return resp, nil
-	}
-	sqlcDir := filepath.Join(dir, filepath.FromSlash(cfg.Out.SQLC))
-	err = filepath.WalkDir(sqlcDir, func(p string, d fs.DirEntry, err error) error {
+// generatedFiles reads every file dalforge and sqlc wrote into dir, skipping
+// the inputs and the lock.
+func generatedFiles(dir string) ([]File, error) {
+	var out []File
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
-			return err
-		}
-		b, err := os.ReadFile(p)
-		if err != nil {
 			return err
 		}
 		rel, err := filepath.Rel(dir, p)
 		if err != nil {
 			return err
 		}
-		resp.Files = append(resp.Files, File{Path: filepath.ToSlash(rel), Generator: "sqlc", Content: string(b)})
+		rel = filepath.ToSlash(rel)
+		if rel == "dalforge.yaml" || rel == "dalforge.lock" || strings.HasPrefix(rel, "proto/") {
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		gen := "dalforge"
+		if strings.HasPrefix(rel, _sqlcOut) {
+			gen = "sqlc"
+		}
+		out = append(out, File{Path: rel, Generator: gen, Content: string(b)})
 		return nil
 	})
-	return resp, err
-}
-
-// _loadError matches one structural error from the loader:
-// "proto/playground.proto:12:3: message".
-var _loadError = regexp.MustCompile(`^(?:[^:]*\.proto):(\d+):(\d+): (.*)$`)
-
-// loadErrors turns the loader's error (one line per problem) into
-// diagnostics; lines without a position are reported at the top.
-func loadErrors(err error) []Diagnostic {
-	var out []Diagnostic
-	sc := bufio.NewScanner(strings.NewReader(err.Error()))
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" {
-			continue
-		}
-		d := Diagnostic{Line: 1, Col: 1, Severity: "error", Message: line}
-		if m := _loadError.FindStringSubmatch(line); m != nil {
-			d.Line, _ = strconv.Atoi(m[1])
-			d.Col, _ = strconv.Atoi(m[2])
-			d.Message = m[3]
-		}
-		out = append(out, d)
-	}
-	if len(out) == 0 {
-		out = append(out, Diagnostic{Line: 1, Col: 1, Severity: "error", Message: err.Error()})
-	}
-	return out
+	slices.SortFunc(out, func(a, b File) int { return strings.Compare(a.Path, b.Path) })
+	return out, err
 }
 
 func writeFile(p, content string) error {

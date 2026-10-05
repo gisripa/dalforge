@@ -1,4 +1,4 @@
-module github.com/gisripa/dalforge/examples/orders
+module github.com/gisripa/dalforge/demos/orders
 
 go 1.26.0
 

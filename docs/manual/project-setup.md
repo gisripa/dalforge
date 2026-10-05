@@ -1,7 +1,7 @@
 # Setting up a project
 
 This chapter sets dalforge up in your own Go repository. The
-[example project](../../examples/orders) is a working reference for every
+[example project](../../demos/orders) is a working reference for every
 step.
 
 ## Two pieces: the generator and the runtime
@@ -120,9 +120,10 @@ when your copy differs from them ([DAL116](lint-rules.md#dal116)).
 ## The commands
 
 ```text
-dalforge lint      [-config dalforge.yaml]
-dalforge generate  [-config dalforge.yaml]
+dalforge lint      [-config dalforge.yaml] [-json]
+dalforge generate  [-config dalforge.yaml] [-json]
 dalforge lock      [-config dalforge.yaml] [-upgrade]
+dalforge version
 ```
 
 **`dalforge lint`** checks the IDL without writing anything. It prints
@@ -142,6 +143,31 @@ there are errors. Otherwise it:
 
 **`dalforge lock`** reports whether `dalforge.lock` matches the running
 toolchain. `-upgrade` rewrites the lock to match.
+
+**`dalforge version`** prints the version on stdout.
+
+### Machine-readable output
+
+With `-json`, `lint` and `generate` print one JSON object on stdout, whatever
+the outcome, instead of text on stderr. The exit code is the same as without
+it. Use it for CI annotations, editor integrations and other tools:
+
+```json
+{
+  "diagnostics": [
+    {"file": "shop/v1/shop.proto", "line": 59, "col": 3, "severity": "error",
+     "rule": "DAL117", "message": "rpc GetAccountByEmail get.by: shop.v1.Account has no field \"emial\""}
+  ],
+  "generated": {"written": 6, "unchanged": 0, "removed": 0, "ran_sqlc": true, "lock_created": true},
+  "error": ""
+}
+```
+
+- `diagnostics` holds every finding. Problems that stop the IDL from loading
+  at all, such as a syntax error, come without a `rule`.
+- `generated` (generate only) is present when files were written.
+- `error` is set for failures that aren't about the IDL: the config, a
+  `dalforge.lock` mismatch, or sqlc.
 
 `dalforge migrate` is reserved for generated migrations, which aren't
 available yet. See

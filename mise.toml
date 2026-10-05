@@ -44,10 +44,13 @@ done
 """
 
 [tasks.test]
-description = "Run unit tests with the race detector (generator and runtime modules)"
+description = "Run unit tests with the race detector (generator, runtime and playground modules)"
+# The playground's tests drive the dalforge binary, as the playground does.
+depends = ["build"]
 run = [
   "go test -race -count=1 ./...",
   "cd dal && go test -race -count=1 ./...",
+  "cd demos/playground && go test -race -count=1 ./...",
 ]
 
 [tasks."test:update"]
@@ -93,9 +96,9 @@ description = "Open psql on the local Postgres"
 run = "docker-compose exec postgres psql -U dalforge"
 
 [tasks.example]
-description = "Generate everything for examples/orders (schema, queries, sqlc.yaml, the Go DAL) to read in your editor; no database needed"
+description = "Generate everything for demos/orders (schema, queries, sqlc.yaml, the Go DAL) to read in your editor; no database needed"
 depends = ["build"]
-dir = "examples/orders"
+dir = "demos/orders"
 run = [
   # Build against the runtime in this checkout, not the pinned release (see go.mod).
   "[ -f go.work ] || go work init . ../../dal",
@@ -105,12 +108,14 @@ run = [
 
 [tasks.playground]
 description = "Open the local playground: edit a proto and see lint findings plus everything dalforge and sqlc generate (http://127.0.0.1:7070)"
-run = "go run ./cmd/dalforge-playground"
+depends = ["build"]
+dir = "demos/playground"
+run = "go run ."
 
 [tasks.demo]
-description = "Run examples/orders like a user would: dalforge generate, then the app on Postgres"
+description = "Run demos/orders like a user would: dalforge generate, then the app on Postgres"
 depends = ["db:up", "example"]
-dir = "examples/orders"
+dir = "demos/orders"
 env = { DATABASE_URL = "postgres://dalforge:dalforge@localhost:55432/dalforge?sslmode=disable" }
 run = "go run ."
 
@@ -124,15 +129,15 @@ run = [
 
 [tasks.fmt]
 description = "Format code"
-run = ["golangci-lint fmt", "cd dal && golangci-lint fmt"]
+run = ["golangci-lint fmt", "cd dal && golangci-lint fmt", "cd demos/playground && golangci-lint fmt"]
 
 [tasks.lint]
 description = "Run linters (generator and runtime modules)"
-run = ["golangci-lint run", "cd dal && golangci-lint run"]
+run = ["golangci-lint run", "cd dal && golangci-lint run", "cd demos/playground && golangci-lint run"]
 
 [tasks.tidy]
 description = "Tidy go.mod / go.sum (generator, runtime and example modules)"
-run = ["go mod tidy", "cd dal && go mod tidy", "cd examples/orders && go mod tidy"]
+run = ["go mod tidy", "cd dal && go mod tidy", "cd demos/orders && GOWORK=off go mod tidy", "cd demos/playground && go mod tidy"]
 
 [tasks.check]
 description = "Fast checks, no Docker: lint + unit tests + build"

@@ -10,7 +10,7 @@ In about ten minutes, starting from a fresh clone, you'll:
 6. run dalforge's own test suites.
 
 The `mise run` tasks work from the repository root or from inside
-`examples/`.
+`demos/`.
 
 ## 0. Prerequisites
 
@@ -39,7 +39,7 @@ That one command:
 - starts the Colima VM and a throwaway `postgres:16.9` (`compose.yaml`; data
   lives in memory);
 - builds `bin/dalforge`;
-- in `examples/orders`, runs `dalforge generate` (schema, queries,
+- in `demos/orders`, runs `dalforge generate` (schema, queries,
   `sqlc.yaml`, then sqlc and the Go DAL), builds the app and runs it.
 
 No Docker handy? `mise run example` does the generate-and-build part only,
@@ -88,18 +88,18 @@ outcome, and the run exits non-zero if anything is off. Pass `-seed N` to
 All checks passed.
 ```
 
-The app's code is [`examples/orders/main.go`](../../examples/orders/main.go).
+The app's code is [`demos/orders/main.go`](../../demos/orders/main.go).
 It's an ordinary Go program that only sees the generated interfaces: no SQL,
 no pools, and no pgx types.
 
 ## 2. What you wrote vs. what dalforge generated
 
-A fresh clone of `examples/orders` contains only what a dalforge user writes.
+A fresh clone of `demos/orders` contains only what a dalforge user writes.
 Everything generated is gitignored, so after the demo, `git status` stays
 clean and you can explore the output freely:
 
 ```text
-examples/orders/
+demos/orders/
 ├── dalforge.yaml                  yours: project config
 ├── dalforge.lock                  pins dalforge, its options and sqlc (a real project commits it*)
 ├── proto/shop/v1/shop.proto       yours: entities and access patterns
@@ -125,7 +125,7 @@ generates with the same toolchain ([details](project-setup.md#dalforgelock)).
 ### The input
 
 One message per table, one service per entity, and one rpc per access
-pattern ([full file](../../examples/orders/proto/shop/v1/shop.proto)):
+pattern ([full file](../../demos/orders/proto/shop/v1/shop.proto)):
 
 ```proto
 message Order {
@@ -238,7 +238,7 @@ orders := shopdal.NewOrderRepository(runner) // a shopdal.OrderRepository
 ## 3. Change an access pattern
 
 Say the product needs "an account's orders in one status, newest first". Add
-the rpc and its request message to `examples/orders/proto/shop/v1/shop.proto`:
+the rpc and its request message to `demos/orders/proto/shop/v1/shop.proto`:
 
 ```proto
   rpc ListOrdersByAccountAndStatus(ByAccountStatus) returns (OrderPage) {
@@ -258,7 +258,7 @@ message ByAccountStatus {
 Then regenerate:
 
 ```sh
-cd examples/orders
+cd demos/orders
 dalforge lint        # silent: nothing to complain about
 dalforge generate
 ```
@@ -299,7 +299,7 @@ Each finding names the rule, the place, the consequence and the fix.
 `dalforge generate` refuses to write anything while there are errors.
 Every rule is explained in the [lint rule catalog](lint-rules.md).
 
-Undo your edits with `git checkout examples/orders/proto`, then run
+Undo your edits with `git checkout demos/orders/proto`, then run
 `dalforge generate` again.
 
 ## 5. Try anything in the playground

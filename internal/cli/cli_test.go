@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,10 +16,24 @@ import (
 	"github.com/gisripa/dalforge/internal/pipeline"
 )
 
+// run runs dalforge and returns its exit code and everything it printed,
+// stdout and stderr together.
 func run(args ...string) (int, string) {
-	var stderr bytes.Buffer
-	code := Run(context.Background(), args, &stderr)
-	return code, stderr.String()
+	var out bytes.Buffer
+	code := Run(context.Background(), args, &out, &out)
+	return code, out.String()
+}
+
+// runJSON runs dalforge with -json and decodes the report on stdout.
+func runJSON(t *testing.T, args ...string) (int, Report, string) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), append(args, "-json"), &stdout, &stderr)
+	var rep Report
+	if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
+		t.Fatalf("stdout isn't a JSON report: %v\n%s", err, stdout.String())
+	}
+	return code, rep, stderr.String()
 }
 
 func TestRun(t *testing.T) {
@@ -117,6 +132,45 @@ func TestGenerate(t *testing.T) {
 	}
 }
 
+// TestJSON pins the -json reports: one JSON object on stdout whatever the
+// outcome, with nothing for people on stderr.
+func TestJSON(t *testing.T) {
+	code, rep, stderr := runJSON(t, "lint", "-config", project(t, nil))
+	if code != ExitOK || len(rep.Diagnostics) != 0 || rep.Error != "" || rep.Generated != nil || stderr != "" {
+		t.Errorf("clean lint = %d, %+v, stderr %q", code, rep, stderr)
+	}
+
+	typo := project(t, func(s string) string { return strings.Replace(s, `eq: ["account_id"]`, `eq: ["acount_id"]`, 1) })
+	code, rep, _ = runJSON(t, "lint", "-config", typo)
+	if code != ExitError || len(rep.Diagnostics) != 1 {
+		t.Fatalf("lint with a typo = %d, %+v", code, rep)
+	}
+	if d := rep.Diagnostics[0]; d.Rule != "DAL117" || d.Severity != "error" || d.File != "orders/v1/orders.proto" || d.Line == 0 || d.Col == 0 {
+		t.Errorf("finding = %+v; want a positioned DAL117 error in orders/v1/orders.proto", d)
+	}
+
+	broken := project(t, func(s string) string {
+		return strings.Replace(s, "message Order {", "message Order {\n  string oops = 99", 1)
+	})
+	code, rep, _ = runJSON(t, "lint", "-config", broken)
+	if code != ExitError || len(rep.Diagnostics) == 0 || rep.Diagnostics[0].Rule != "" || rep.Diagnostics[0].Line == 0 {
+		t.Errorf("syntax error = %d, %+v; want positioned findings without a rule", code, rep)
+	}
+
+	code, rep, _ = runJSON(t, "lint", "-config", "/nonexistent/dalforge.yaml")
+	if code != ExitError || !strings.Contains(rep.Error, "no such file") {
+		t.Errorf("missing config = %d, %+v; want the failure in error", code, rep)
+	}
+
+	if _, err := exec.LookPath("sqlc"); err != nil {
+		t.Skip("sqlc not on PATH; run tests through mise")
+	}
+	code, rep, stderr = runJSON(t, "generate", "-config", project(t, nil))
+	if code != ExitOK || rep.Generated == nil || !rep.Generated.RanSQLC || !rep.Generated.LockCreated || rep.Generated.Written == 0 || stderr != "" {
+		t.Errorf("generate = %d, %+v (generated %+v), stderr %q", code, rep, rep.Generated, stderr)
+	}
+}
+
 func TestVerifyLock(t *testing.T) {
 	cfgPath := project(t, nil)
 	cfg, err := config.Load(cfgPath)
@@ -129,9 +183,10 @@ func TestVerifyLock(t *testing.T) {
 	}
 
 	var stderr bytes.Buffer
+	r := &session{name: "generate", s: streams{out: &stderr, err: &stderr}}
 	newer := pinned
 	newer.Dalforge = "v0.4.0"
-	if code := verifyLock(cfg, newer, "generate", &stderr); code != ExitError ||
+	if code, _ := r.verifyLock(cfg, newer); code != ExitError ||
 		!strings.Contains(stderr.String(), "dalforge: locked v0.3.1, running v0.4.0") || !strings.Contains(stderr.String(), "lock -upgrade") {
 		t.Errorf("release mismatch = %d, %q; want an error naming the versions and the fix", code, stderr.String())
 	}
@@ -139,7 +194,7 @@ func TestVerifyLock(t *testing.T) {
 	stderr.Reset()
 	devel := pinned
 	devel.Dalforge = lock.Devel
-	if code := verifyLock(cfg, devel, "generate", &stderr); code != ExitOK || !strings.Contains(stderr.String(), "warning:") {
+	if code, ok := r.verifyLock(cfg, devel); code != ExitOK || !ok || !strings.Contains(stderr.String(), "warning:") {
 		t.Errorf("local build = %d, %q; want a warning and to continue", code, stderr.String())
 	}
 }

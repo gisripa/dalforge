@@ -10,7 +10,7 @@ pattern, tripping the linter), see the [Quickstart](../../docs/manual/quickstart
 
 ## Run it
 
-From the repository root, or from `examples/`:
+From the repository root, or from `demos/`:
 
 ```sh
 mise run demo        # the full run against a local Postgres

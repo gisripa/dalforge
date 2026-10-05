@@ -32,7 +32,7 @@ Generated code and the runtime are released in lockstep: users run dalforge
 4. Bump the example to the new runtime, and commit it:
 
    ```sh
-   cd examples/orders
+   cd demos/orders
    GOWORK=off go get github.com/gisripa/dalforge/dal@v0.1.0
    GOWORK=off go mod tidy
    ```

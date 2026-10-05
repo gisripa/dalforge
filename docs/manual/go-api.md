@@ -233,7 +233,7 @@ SELECT id FROM accounts WHERE id = @id FOR KEY SHARE;
 deleting the account and changing its key, but not ordinary updates to it.
 If the query returns no row (`dalpg.IsNoRows`), the parent doesn't exist:
 return an error and the transaction rolls back. The
-[example](../../examples/orders/main.go) (`placeOrder`) does exactly this.
+[example](../../demos/orders/main.go) (`placeOrder`) does exactly this.
 
 ## Testing your code
 

@@ -105,7 +105,7 @@
 </head>
 <body>
 <header>
-  <h1>dalforge <span>playground</span></h1>
+  <h1>dalforge <span>playground</span> <span id="version"></span></h1>
   <label>Preset <select id="preset"></select></label>
   <button id="run" class="primary" title="Ctrl/⌘ + Enter">Generate</button>
   <span id="status">loading…</span>
@@ -255,7 +255,7 @@
       if (id !== inflight) return; // a newer run started
       diags = out.diagnostics || [];
       files = out.files || [];
-      $("note").textContent = out.sqlc ? "sqlc: " + out.sqlc : "";
+      $("note").textContent = out.note || "";
       const errors = diags.filter((d) => d.severity === "error").length;
       const ms = Math.round(performance.now() - started);
       $("status").textContent = errors
@@ -286,6 +286,8 @@
     }
   });
   $("run").onclick = () => { clearTimeout(timer); generate(); };
+
+  fetch("/api/info").then((r) => r.json()).then((info) => { $("version").textContent = "· " + info.dalforge; }).catch(() => {});
 
   fetch("/api/presets").then((r) => r.json()).then((presets) => {
     for (const p of presets) {
